@@ -4,6 +4,15 @@ description: Create a feature spec with Gherkin scenarios and ASCII mockups (TDD
 
 Create the feature specification for: $ARGUMENTS
 
+## Mode Detection
+
+Check if `--full` or `--auto` flag is present in the arguments:
+
+| Mode | Behavior |
+|------|----------|
+| Normal (default) | Stop for approval at each step |
+| Full (`--full` or `--auto`) | Complete TDD cycle without pauses |
+
 ## Instructions
 
 1. **Check/Create Design System**
@@ -37,19 +46,25 @@ Create the feature specification for: $ARGUMENTS
 4. **Create Component Stubs**
    - If mockup references components not in `.specs/design-system/components/`, create stubs
 
-5. **STOP for Approval**
-   - Do NOT write implementation code
-   - Do NOT write tests yet
-   - Ask: "Does this look right? Ready to write tests?"
+5. **Pause Point**
+   - **Normal Mode**: STOP - ask "Does this look right? Ready to write tests?"
+   - **Full Mode**: Skip pause, immediately proceed to tests
 
-## After Approval
+## After Approval (or immediately in Full Mode)
 
-When user approves:
+**Step 2: Write Tests**
 1. Write failing tests covering all scenarios
 2. Update frontmatter: `status: tested`, add test files to `tests: []`
-3. Ask: "Tests written (failing). Ready to implement?"
+3. **Normal Mode**: Ask "Tests written (failing). Ready to implement?"
+4. **Full Mode**: Skip pause, immediately implement
 
-When implementation approved:
+**Step 3: Implement**
 1. Implement until tests pass using design tokens
 2. Update frontmatter: `status: implemented`, add components to `components: []`
-3. Optionally run `/compound` to extract learnings
+
+**Step 4: Compound (Full Mode runs automatically)**
+1. Run `/compound` to extract learnings
+2. Update `.specs/learnings/{category}.md`
+
+**Step 5: Commit (Full Mode only)**
+1. Commit all changes: `feat: {feature name} (full TDD cycle)`

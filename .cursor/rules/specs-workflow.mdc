@@ -12,6 +12,32 @@ This project uses a specs-driven workflow. The `.specs/` directory contains:
 - `learnings/` - Cross-cutting patterns by category
 - `mapping.md` - Links features ↔ tests ↔ components ↔ design
 
+---
+
+## Command Triggers
+
+When the user says any of these phrases, **automatically invoke `/spec-first`**:
+
+| User says | Action |
+|-----------|--------|
+| "spec first" | Run `/spec-first {feature}` |
+| "spec-first" | Run `/spec-first {feature}` |
+| "write a spec for" | Run `/spec-first {feature}` |
+| "create a spec" | Run `/spec-first {feature}` |
+| "spec this out" | Run `/spec-first {feature}` |
+| "spec out" | Run `/spec-first {feature}` |
+| "plan this feature" | Run `/spec-first {feature}` |
+| "write the spec" | Run `/spec-first {feature}` |
+| "create spec" | Run `/spec-first {feature}` |
+
+Extract the feature description from the rest of their message.
+
+### Full Mode Triggers
+
+If user includes "full", "auto", "no stops", or "don't pause":
+- Add `--full` flag to the command
+- Example: "spec first user auth, full mode" → `/spec-first user auth --full`
+
 ## Directory Structure
 
 ```

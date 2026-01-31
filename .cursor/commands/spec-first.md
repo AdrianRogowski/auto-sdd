@@ -14,6 +14,36 @@ Create the feature specification with Gherkin scenarios and ASCII mockups withou
       (create if not exists)
 ```
 
+## Mode Detection
+
+Check if the user included `--full` or `--auto` flag:
+
+| Command | Mode | Behavior |
+|---------|------|----------|
+| `/spec-first user auth` | Normal | Stop for approval at each step |
+| `/spec-first user auth --full` | Full | Complete TDD cycle without pauses |
+| `/spec-first --full user auth` | Full | Same (flag position flexible) |
+| `/spec-first user auth --auto` | Full | Alias for --full |
+
+### Full Mode Behavior
+
+If `--full` or `--auto` flag is present, execute the ENTIRE TDD cycle without stopping:
+
+1. Create spec with Gherkin + mockup
+2. **Do NOT pause** - immediately write failing tests
+3. **Do NOT pause** - immediately implement until tests pass
+4. Update all frontmatter (status: implemented)
+5. Run `/compound` to extract learnings
+6. Commit with descriptive message
+
+**Skip all "Ready to...?" prompts in full mode.**
+
+### Normal Mode Behavior (default)
+
+Stop for user approval at each step (existing behavior).
+
+---
+
 ## Behavior
 
 ### 1. Check/Create Design System
@@ -46,11 +76,19 @@ If the mockup references components that don't exist in `.specs/design-system/co
 - Create **stub** files for each new component
 - Stubs include: name, purpose, status "pending implementation"
 
-### 5. Do NOT Implement
+### 5. Pause Point (Normal Mode Only)
 
+**If Normal Mode (no --full flag):**
 - Do NOT write any implementation code
 - Do NOT write tests yet (that's step 2)
 - STOP and wait for user approval
+
+**If Full Mode (--full flag present):**
+- Skip this pause
+- Immediately proceed to write tests (Step 2)
+- Then implement (Step 3)
+- Then run /compound
+- Then commit
 
 ---
 
@@ -220,9 +258,10 @@ After creating the spec, provide this summary:
 
 ---
 
-## Next Steps After Approval
+## Next Steps After Approval (or immediately in Full Mode)
 
-When user says "go", "yes", "looks good", or approves:
+**Normal Mode**: When user says "go", "yes", "looks good", or approves
+**Full Mode**: Execute immediately without waiting for approval
 
 ### Step 2: Write Failing Tests
 1. Write tests that cover ALL Gherkin scenarios
@@ -230,10 +269,12 @@ When user says "go", "yes", "looks good", or approves:
 3. Document tests in `.specs/test-suites/{path}.tests.md`
 4. Update spec frontmatter: `status: tested`, add test files to `tests: []`
 5. mapping.md will auto-regenerate via hook
-6. Ask: "Tests written (failing). Ready to implement?"
+6. **Normal Mode**: Ask: "Tests written (failing). Ready to implement?"
+7. **Full Mode**: Skip asking, proceed immediately to Step 3
 
 ### Step 3: Implement
-When user approves implementation:
+**Normal Mode**: When user approves implementation
+**Full Mode**: Execute immediately after tests
 1. Implement feature incrementally
 2. Use design tokens from `.specs/design-system/tokens.md`
 3. Follow component patterns from design system
@@ -247,11 +288,20 @@ After implementation:
 2. Update stub status from "📝 Stub" to "✅ Documented"
 3. Or use `/design-component {name}` to auto-document
 
-### Step 5: Compound Learnings (Optional)
-At end of session:
+### Step 5: Compound Learnings
+**Normal Mode**: Optional - user can run `/compound` at end of session
+**Full Mode**: Automatically run /compound after implementation
+
 1. Run `/compound` to extract learnings
 2. Adds patterns/gotchas to spec's `## Learnings` section
 3. Cross-cutting patterns go to `.specs/learnings/{category}.md`
+
+### Step 6: Commit (Full Mode Only)
+
+**Full Mode only** - after /compound completes:
+1. Stage all changes: `git add .specs/ src/ tests/`
+2. Commit with message: `feat: {feature name} (full TDD cycle)`
+3. Report completion to user
 
 ---
 
