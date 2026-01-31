@@ -43,10 +43,23 @@ rm -rf auto-sdd
 
 If you have an existing project using SDD 1.0 (`git sdd`), **do NOT run `git auto`** - it would overwrite your files.
 
-Instead, use the migration command:
+Instead, first install the migration command:
+
+```bash
+git auto-upgrade
+```
+
+This only copies the `/sdd-migrate` command into your project. Then run:
 
 ```bash
 /sdd-migrate
+```
+
+**Git alias for `auto-upgrade`** (add to `~/.gitconfig`):
+
+```ini
+[alias]
+    auto-upgrade = "!f() { git clone --depth 1 https://github.com/AdrianRogowski/auto-sdd.git .sdd-temp && cp .sdd-temp/.cursor/commands/sdd-migrate.md .cursor/commands/ 2>/dev/null && cp .sdd-temp/.claude/commands/sdd-migrate.md .claude/commands/ 2>/dev/null && rm -rf .sdd-temp && echo '✅ Migration command installed! Now run /sdd-migrate'; }; f"
 ```
 
 This safely upgrades by:
