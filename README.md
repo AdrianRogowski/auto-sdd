@@ -43,34 +43,34 @@ rm -rf auto-sdd
 
 If you have an existing project using SDD 1.0 (`git sdd`), **do NOT run `git auto`** - it would overwrite your files.
 
-Instead, first install the migration command:
+Instead, use the two-step migration process:
 
 ```bash
+# Step 1: Stage the 2.0 files (creates .sdd-upgrade/ directory)
 git auto-upgrade
-```
 
-This only copies the `/sdd-migrate` command into your project. Then run:
-
-```bash
+# Step 2: Run the migration (in Cursor or Claude Code)
 /sdd-migrate
 ```
+
+**How it works:**
+
+1. `git auto-upgrade` downloads all SDD 2.0 files into a staging directory (`.sdd-upgrade/`)
+2. `/sdd-migrate` reads from staging and intelligently upgrades your project:
+   - **Preserves custom commands** you've added
+   - **Preserves custom rules** you've created
+   - Only replaces "stock" SDD commands with 2.0 versions
+   - Adds YAML frontmatter to existing specs (without changing content)
+   - Adds new files (learnings/, hooks, scripts)
+   - Regenerates `mapping.md` (now auto-generated)
+3. Staging directory is deleted after successful migration
 
 **Git alias for `auto-upgrade`** (add to `~/.gitconfig`):
 
 ```ini
 [alias]
-    auto-upgrade = "!f() { git clone --depth 1 https://github.com/AdrianRogowski/auto-sdd.git .sdd-temp && cp .sdd-temp/.cursor/commands/sdd-migrate.md .cursor/commands/ 2>/dev/null && cp .sdd-temp/.claude/commands/sdd-migrate.md .claude/commands/ 2>/dev/null && rm -rf .sdd-temp && echo '✅ Migration command installed! Now run /sdd-migrate'; }; f"
+    auto-upgrade = "!f() { git clone --depth 1 https://github.com/AdrianRogowski/auto-sdd.git .sdd-temp && rm -rf .sdd-temp/.git && mkdir -p .sdd-upgrade && cp -r .sdd-temp/. .sdd-upgrade/ && rm -rf .sdd-temp && echo 'SDD 2.0 files staged in .sdd-upgrade/' && echo 'Now run /sdd-migrate to upgrade'; }; f"
 ```
-
-This safely upgrades by:
-- **Preserving custom commands** you've added
-- **Preserving custom rules** you've created
-- Adding `.specs/learnings/` folder (compound learning)
-- Adding YAML frontmatter to existing specs (without changing content)
-- Updating only "stock" SDD commands to 2.0 versions
-- Adding `/compound` command and hooks
-- Adding automation scripts
-- Regenerating `mapping.md` (now auto-generated)
 
 **Note**: Existing feature specs without ASCII mockups will continue to work. New specs created with `/spec-first` will include them.
 

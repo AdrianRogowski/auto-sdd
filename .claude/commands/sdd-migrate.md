@@ -4,9 +4,15 @@ description: Migrate from SDD 1.0 to SDD 2.0 (preserves custom commands)
 
 Upgrade this project from SDD 1.0 to SDD 2.0.
 
-**Important**: Do NOT use `git auto` on existing SDD projects - it overwrites files. Use this command instead.
+**Prerequisites**: Run `git auto-upgrade` first to stage 2.0 files in `.sdd-upgrade/`.
 
-## Stock SDD Commands (safe to update)
+## Prerequisite Checks
+
+1. Check `.sdd-upgrade/` exists → if missing, error: "Run 'git auto-upgrade' first"
+2. Check `.specs/` exists → if missing, error: "Not an SDD project, use 'git auto'"
+3. Check `.specs/.sdd-version` → if "2.0", already migrated
+
+## Stock Commands (safe to replace)
 
 ```
 catch-drift, check-coverage, code-review, design-component,
@@ -15,26 +21,25 @@ refactor, spec-first, spec-init, start-feature, update-test-docs,
 verify-test-counts
 ```
 
-Any other commands are considered CUSTOM and will be preserved.
+Any other commands are CUSTOM → preserve them.
 
 ## Migration Steps
 
-1. **Inventory commands**: Identify stock vs custom
-2. **Create learnings folder**: `.specs/learnings/` with 7 category files
-3. **Add frontmatter to specs**: Only if missing, don't change content
-4. **Update stock commands**: Replace with 2.0 versions
-5. **Preserve custom commands**: Don't touch them
-6. **Add new commands**: compound.md, sdd-migrate.md
-7. **Update stock rules**: Add compound.mdc
-8. **Add hooks**: If not already present
-9. **Add scripts**: Automation scripts
-10. **Backup & regenerate mapping.md**
-11. **Update CLAUDE.md**: Ask if customized
-12. **Create version file**: .specs/.sdd-version = 2.0
+1. **Inventory**: List commands/rules, identify stock vs custom
+2. **Learnings**: `cp -r .sdd-upgrade/.specs/learnings .specs/learnings`
+3. **Frontmatter**: Add YAML frontmatter to specs that don't have it (don't change content)
+4. **Commands**: Copy stock commands from `.sdd-upgrade/.cursor/commands/`
+5. **Rules**: Copy stock rules from `.sdd-upgrade/.cursor/rules/`, add compound.mdc
+6. **Hooks**: Copy `.sdd-upgrade/.cursor/hooks.json` and hooks/ if not exist
+7. **Scripts**: `cp -r .sdd-upgrade/scripts .`
+8. **Mapping**: Backup mapping.md, run `./scripts/generate-mapping.sh`
+9. **CLAUDE.md**: Copy from staging
+10. **Version**: `echo "2.0" > .specs/.sdd-version`
+11. **Cleanup**: `rm -rf .sdd-upgrade`
 
 ## Frontmatter Format
 
-Add to specs that don't have it:
+Add to specs missing it:
 
 ```yaml
 ---
@@ -49,14 +54,6 @@ updated: {today}
 ---
 ```
 
-Do NOT add ASCII mockups to existing specs - they work without them.
-
-## Custom Command Detection
-
-If a command exists that's not in the stock list, it's custom → preserve it.
-
-If a stock command has been modified (differs from stock 1.0), ask before replacing.
-
 ## Output
 
-Show inventory, migration plan, ask for confirmation, then execute preserving all custom work.
+Show inventory, execute steps, summarize what was updated vs preserved, list new capabilities.

@@ -2,21 +2,40 @@
 
 Upgrade an existing SDD 1.0 project to SDD 2.0 with compound learning and automation.
 
-**Important**: This command is for projects that already have SDD installed. Do NOT use `git auto` on existing SDD projects - it would overwrite files.
+**Prerequisites**: Run `git auto-upgrade` first to stage the 2.0 files in `.sdd-upgrade/`.
 
-## Detection
+## Step 0: Check Prerequisites
+
+First, verify the staging directory exists:
 
 ```
-1. If .specs/.sdd-version exists → read version
-2. If no version file but .specs/ exists → SDD 1.0
-3. If no .specs/ → not an SDD project (suggest git auto)
+Check for .sdd-upgrade/ directory
+├── If exists → Continue with migration
+└── If missing → ERROR: "Run 'git auto-upgrade' first to stage the 2.0 files"
 ```
 
-## Stock SDD Commands
+Also check this is an SDD project:
+```
+Check for .specs/ directory
+├── If exists → SDD project, continue
+└── If missing → ERROR: "Not an SDD project. Use 'git auto' for fresh install"
+```
 
-These are the "official" SDD commands that can be safely updated:
+Check version:
+```
+Check .specs/.sdd-version
+├── If "2.0" → Already migrated, nothing to do
+├── If missing → SDD 1.0, proceed with migration
+└── If other → Future version, warn user
+```
 
-**SDD 1.0 Commands** (will be updated):
+---
+
+## Step 1: Inventory Existing Commands
+
+List all files in `.cursor/commands/` and categorize them:
+
+**Stock SDD 1.0 commands** (will be replaced from staging):
 - catch-drift.md
 - check-coverage.md
 - code-review.md
@@ -33,42 +52,44 @@ These are the "official" SDD commands that can be safely updated:
 - update-test-docs.md
 - verify-test-counts.md
 
-**SDD 2.0 Adds** (new files):
-- compound.md
-- sdd-migrate.md
+**Any other .md files** in commands/ are custom → preserve them.
 
-**Custom commands** (any other .md files) will be PRESERVED.
-
-## Migration Steps (1.0 → 2.0)
-
-### Step 1: Inventory Existing Commands
-
+Output:
 ```
-Scanning .cursor/commands/...
-
-Stock SDD commands found (will update):
-  ✓ spec-first.md
-  ✓ spec-init.md
-  ✓ catch-drift.md
-  ... (list all found)
-
-Custom commands found (will preserve):
-  • my-deploy.md
-  • team-standup.md
-  ... (list any non-stock)
-
-New commands to add:
-  + compound.md
-  + sdd-migrate.md
+Command Inventory:
+├── Stock commands to update: [count]
+│   • spec-first.md
+│   • spec-init.md
+│   • ... (list all found)
+├── Custom commands to preserve: [count]
+│   • my-custom-command.md (if any)
+└── New commands to add: 2
+    • compound.md
+    • sdd-migrate.md
 ```
 
-### Step 2: Create Learnings Folder
+---
 
+## Step 2: Inventory Existing Rules
+
+List all files in `.cursor/rules/`:
+
+**Stock SDD 1.0 rules** (will be replaced):
+- design-tokens.mdc
+- specs-workflow.mdc
+
+**Any other .mdc files** are custom → preserve them.
+
+---
+
+## Step 3: Create Learnings Folder
+
+Copy from staging:
 ```bash
-mkdir -p .specs/learnings
+cp -r .sdd-upgrade/.specs/learnings .specs/learnings
 ```
 
-Create these files (only if they don't exist):
+This creates:
 - `.specs/learnings/index.md`
 - `.specs/learnings/testing.md`
 - `.specs/learnings/performance.md`
@@ -77,16 +98,18 @@ Create these files (only if they don't exist):
 - `.specs/learnings/design.md`
 - `.specs/learnings/general.md`
 
-### Step 3: Add YAML Frontmatter to Existing Specs
+---
 
-For each `.specs/features/**/*.feature.md` that does NOT already have frontmatter:
+## Step 4: Add YAML Frontmatter to Existing Specs
+
+For each `.specs/features/**/*.feature.md`:
 
 1. Read the file
-2. Check if it starts with `---` (already has frontmatter) → skip
-3. Extract feature name from `# Feature Name` header
-4. Extract domain from file path
-5. Look for `**Source File**:` line to get source
-6. Prepend YAML frontmatter:
+2. Check if it already starts with `---` (has frontmatter) → skip
+3. Extract feature name from first `# ` heading
+4. Extract domain from file path (e.g., `auth` from `.specs/features/auth/login.feature.md`)
+5. Look for `**Source File**:` to extract source path
+6. Prepend frontmatter:
 
 ```yaml
 ---
@@ -97,80 +120,90 @@ tests: []
 components: []
 design_refs: []
 status: implemented
-created: {today}
-updated: {today}
+created: {today's date}
+updated: {today's date}
 ---
 ```
 
-**Do NOT**:
-- Add ASCII mockups to existing specs (they work without them)
-- Remove any existing content
-- Change the spec format beyond adding frontmatter
+**Important**: Do NOT modify any other content in the spec. Just prepend frontmatter.
 
-### Step 4: Update Stock Commands Only
+---
 
-For each stock SDD command found in Step 1:
-- Replace with SDD 2.0 version
-- Show diff summary (lines added/removed)
+## Step 5: Update Stock Commands
 
-For custom commands:
-- Leave completely untouched
-- Log that they were preserved
-
-### Step 5: Update Stock Rules Only
-
-**Stock SDD rules** (will update):
-- design-tokens.mdc
-- specs-workflow.mdc
-
-**SDD 2.0 Adds**:
-- compound.mdc
-
-Custom rules (any other .mdc files) will be PRESERVED.
-
-### Step 6: Add Hooks (if not exist)
-
-Only create if they don't already exist:
-- `.cursor/hooks.json`
-- `.cursor/hooks/regenerate-mapping.sh`
-- `.cursor/hooks/check-conflicts.sh`
-- `.cursor/hooks/session-end.sh`
-
-If hooks already exist, show warning and skip.
-
-### Step 7: Add Automation Scripts
-
-Create `scripts/` directory (if not exists) with:
-- `generate-mapping.sh`
-- `nightly-review.sh`
-- `overnight-autonomous.sh`
-- `setup-overnight.sh`
-- `uninstall-overnight.sh`
-- `launchd/` (plist files)
-
-If any script already exists with same name, show diff and ask whether to overwrite.
-
-### Step 8: Regenerate mapping.md
-
-Backup old mapping.md:
+For each stock command found in Step 1:
 ```bash
-cp .specs/mapping.md .specs/mapping.md.backup
+cp .sdd-upgrade/.cursor/commands/{name}.md .cursor/commands/{name}.md
 ```
 
-Then regenerate:
+Do the same for `.claude/commands/` if it exists.
+
+**Do NOT touch custom commands** - they stay exactly as they are.
+
+---
+
+## Step 6: Update Stock Rules
+
+For each stock rule found in Step 2:
 ```bash
+cp .sdd-upgrade/.cursor/rules/{name}.mdc .cursor/rules/{name}.mdc
+```
+
+Add the new compound rule:
+```bash
+cp .sdd-upgrade/.cursor/rules/compound.mdc .cursor/rules/compound.mdc
+```
+
+---
+
+## Step 7: Add Hooks
+
+If `.cursor/hooks.json` doesn't exist:
+```bash
+cp .sdd-upgrade/.cursor/hooks.json .cursor/hooks.json
+cp -r .sdd-upgrade/.cursor/hooks .cursor/hooks
+chmod +x .cursor/hooks/*.sh
+```
+
+If hooks already exist, warn user and skip.
+
+---
+
+## Step 8: Add Automation Scripts
+
+```bash
+cp -r .sdd-upgrade/scripts .
+chmod +x scripts/*.sh
+```
+
+Also copy supporting files:
+```bash
+cp .sdd-upgrade/.env.local.example . 2>/dev/null || true
+mkdir -p logs
+```
+
+---
+
+## Step 9: Backup and Regenerate mapping.md
+
+```bash
+cp .specs/mapping.md .specs/mapping.md.backup
 ./scripts/generate-mapping.sh
 ```
 
-Tell user: "Old mapping backed up to mapping.md.backup"
+Tell user: "Old mapping backed up to .specs/mapping.md.backup"
 
-### Step 9: Update CLAUDE.md
+---
 
-Compare existing CLAUDE.md with SDD 2.0 version:
-- If identical to SDD 1.0 stock → replace
-- If customized → show diff, ask whether to replace or merge
+## Step 10: Update CLAUDE.md
 
-### Step 10: Create Version File
+```bash
+cp .sdd-upgrade/CLAUDE.md CLAUDE.md
+```
+
+---
+
+## Step 11: Create Version File
 
 ```bash
 echo "2.0" > .specs/.sdd-version
@@ -178,106 +211,77 @@ echo "2.0" > .specs/.sdd-version
 
 ---
 
-## Output
+## Step 12: Cleanup Staging Directory
 
-```
-═══════════════════════════════════════════════════════════════════
-                    SDD MIGRATION: 1.0 → 2.0
-═══════════════════════════════════════════════════════════════════
-
-Detected: SDD 1.0 (no version file, .specs/ exists)
-
-Command Inventory:
-├── Stock commands to update: 15
-├── Custom commands to preserve: 2
-│   • my-deploy.md
-│   • team-standup.md
-└── New commands to add: 2
-
-Feature Specs:
-├── Total specs found: 8
-├── Already have frontmatter: 2
-└── Need frontmatter added: 6
-
-Migration Plan:
-├── Create .specs/learnings/ folder (7 files)
-├── Add frontmatter to 6 feature specs
-├── Update 15 stock commands
-├── Preserve 2 custom commands
-├── Add 2 new commands
-├── Update 2 stock rules, add 1 new
-├── Add hooks system
-├── Add automation scripts
-├── Backup and regenerate mapping.md
-└── Create version file
-
-Proceed? [y/n]
-```
-
-After confirmation:
-
-```
-═══════════════════════════════════════════════════════════════════
-                    MIGRATION COMPLETE
-═══════════════════════════════════════════════════════════════════
-
-✓ Created .specs/learnings/ (7 files)
-✓ Added frontmatter to 6 feature specs
-✓ Updated 15 stock commands
-✓ Preserved 2 custom commands (untouched)
-✓ Added compound.md, sdd-migrate.md
-✓ Updated 2 stock rules, added compound.mdc
-✓ Added hooks system
-✓ Added automation scripts
-✓ Backed up mapping.md → mapping.md.backup
-✓ Regenerated mapping.md
-✓ Version: 2.0
-
-Custom commands preserved:
-  • .cursor/commands/my-deploy.md
-  • .cursor/commands/team-standup.md
-
-New capabilities:
-• /compound - Extract learnings from sessions
-• Overnight automation (run ./scripts/setup-overnight.sh)
-• Auto-generated mapping (no more merge conflicts)
-• Category-based learnings
-
-Note: Existing feature specs were NOT modified beyond adding
-frontmatter. They don't need ASCII mockups to work - new specs
-created with /spec-first will have them.
+```bash
+rm -rf .sdd-upgrade
 ```
 
 ---
 
-## Edge Cases
+## Step 13: Summary
 
-### Custom command has same name as stock command
+Output final summary:
 
-If user has customized a stock command (e.g., modified `spec-first.md`):
-- Show diff between their version and stock 1.0 version
-- If different from stock 1.0, ask: "spec-first.md appears customized. Update anyway? [y/n/diff]"
+```
+═══════════════════════════════════════════════════════════════════
+                    MIGRATION COMPLETE: 1.0 → 2.0
+═══════════════════════════════════════════════════════════════════
 
-### CLAUDE.md is customized
+✓ Created .specs/learnings/ (7 files)
+✓ Added frontmatter to [N] feature specs
+✓ Updated [N] stock commands
+✓ Preserved [N] custom commands
+✓ Added compound.md, sdd-migrate.md
+✓ Updated [N] stock rules, added compound.mdc
+✓ Added hooks system
+✓ Added automation scripts
+✓ Backed up mapping.md → mapping.md.backup
+✓ Regenerated mapping.md
+✓ Updated CLAUDE.md
+✓ Cleaned up staging directory
+✓ Version: 2.0
 
-- Show diff
-- Offer options: [r]eplace, [m]erge (add new sections), [s]kip
+Custom commands preserved (untouched):
+  • [list any custom commands]
 
-### hooks.json already exists
+Custom rules preserved (untouched):
+  • [list any custom rules]
 
-- Show existing config
-- Ask whether to merge or replace
+New capabilities:
+  • /compound - Extract learnings from sessions
+  • Overnight automation (run ./scripts/setup-overnight.sh)
+  • Auto-generated mapping (no more merge conflicts)
+  • Category-based learnings in .specs/learnings/
+
+Note: Existing feature specs were NOT modified beyond adding
+frontmatter. They don't need ASCII mockups to work.
+```
+
+---
+
+## Error Handling
+
+| Error | Message |
+|-------|---------|
+| No `.sdd-upgrade/` | "Run 'git auto-upgrade' first to stage the 2.0 files" |
+| No `.specs/` | "Not an SDD project. Use 'git auto' for fresh install" |
+| Already 2.0 | "Already on SDD 2.0. No migration needed." |
+| Script fails | Show error, don't delete staging dir so user can retry |
 
 ---
 
 ## Rollback
 
-If something goes wrong, user can restore from backup:
+If something goes wrong:
 
 ```bash
 # Restore mapping
 mv .specs/mapping.md.backup .specs/mapping.md
 
-# Remove version file to re-run migration
+# Remove version to re-run migration
 rm .specs/.sdd-version
+
+# Re-run git auto-upgrade to get fresh staging
+git auto-upgrade
 ```

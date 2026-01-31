@@ -1,0 +1,16 @@
+# SDD Migration staging directory
+.sdd-upgrade/
+
+# Environment files
+.env.local
+
+# Logs
+logs/*.log
+
+# OS files
+.DS_Store
+
+# Editor directories
+.idea/
+*.swp
+*.swo
