@@ -25,7 +25,7 @@ Initialize the spec-driven development workflow on an existing codebase. This co
 
 - First time adopting spec-driven workflow on existing project
 - Onboarding legacy codebase into documentation
-- After `git sdd` on an existing project
+- After `git auto` or `git sdd` on an existing project
 
 ## Behavior
 
@@ -176,8 +176,8 @@ For each uncovered file in the queue:
 │  └─▶ Parse test file for describe blocks and test names         │
 │  └─▶ Assign test IDs                                            │
 │                                                                 │
-│  Step 6: Update Mapping                                         │
-│  └─▶ Add entry to .specs/mapping.md                             │
+│  Step 6: Mapping (Auto-Generated)                               │
+│  └─▶ YAML frontmatter triggers auto-regeneration                │
 │                                                                 │
 │  Step 7: Create Component Stubs (if UI)                         │
 │  └─▶ If component, create stub in design-system/components/     │

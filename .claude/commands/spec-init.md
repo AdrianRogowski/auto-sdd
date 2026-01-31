@@ -24,7 +24,7 @@ For each uncovered file:
 3. Write PASSING tests (document reality, not aspirations)
 4. Run tests, fix if needed (max 3 attempts, then log to needs-review.md)
 5. Document test suite
-6. Update mapping.md
+6. Add YAML frontmatter to spec (mapping auto-generates)
 7. Create component stubs if UI
 
 Show progress after each file.
