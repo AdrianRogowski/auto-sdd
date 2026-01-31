@@ -39,6 +39,22 @@ cp -r auto-sdd/.cursor auto-sdd/.claude auto-sdd/.specs auto-sdd/scripts auto-sd
 rm -rf auto-sdd
 ```
 
+### Migrating from SDD 1.0
+
+If you have an existing project using SDD 1.0 (`git sdd`), migrate to 2.0:
+
+```bash
+/sdd-migrate
+```
+
+This will:
+- Create `.specs/learnings/` folder (compound learning)
+- Add YAML frontmatter to existing feature specs
+- Add `/compound` command and hooks
+- Add automation scripts
+- Regenerate `mapping.md` (now auto-generated)
+- Create version file (`.specs/.sdd-version`)
+
 ### Post-Install (Optional: Overnight Automation)
 
 ```bash
@@ -102,6 +118,7 @@ After installing, just use the slash commands:
 | `/spec-first` | Create feature spec with Gherkin + ASCII mockup |
 | `/compound` | Extract learnings from current session |
 | `/spec-init` | Bootstrap SDD on existing codebase |
+| `/sdd-migrate` | Migrate from SDD 1.0 to 2.0 |
 | `/catch-drift` | Detect spec ↔ code misalignment |
 | `/check-coverage` | Find gaps in spec/test coverage |
 | `/fix-bug` | Create regression test for bug |
