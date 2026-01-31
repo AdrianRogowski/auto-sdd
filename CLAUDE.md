@@ -247,7 +247,7 @@ When working with specs, always tell the user:
 | Design tokens | `.specs/design-system/tokens.md` |
 | Component docs | `.specs/design-system/components/{name}.md` |
 | Mapping | `.specs/mapping.md` (auto-generated) |
-| Cross-cutting learnings | `.specs/learnings.md` |
+| Cross-cutting learnings | `.specs/learnings/` (by category) |
 
 ---
 
@@ -281,9 +281,21 @@ updated: YYYY-MM-DD
 
 ---
 
-## Learned Patterns
+## Learnings
 
-<!-- Updated by /compound - newest first -->
-<!-- Critical learnings that apply to ALL future work in this codebase -->
+Cross-cutting learnings are stored in `.specs/learnings/` by category:
 
-_No learnings captured yet. Run `/compound` at the end of implementation sessions._
+| Category | File |
+|----------|------|
+| Testing | `.specs/learnings/testing.md` |
+| Performance | `.specs/learnings/performance.md` |
+| Security | `.specs/learnings/security.md` |
+| API & Data | `.specs/learnings/api.md` |
+| Design System | `.specs/learnings/design.md` |
+| General | `.specs/learnings/general.md` |
+
+Read `.specs/learnings/index.md` for a summary and recent learnings.
+
+Feature-specific learnings are in each spec's `## Learnings` section.
+
+Run `/compound` at the end of implementation sessions to extract and persist learnings.

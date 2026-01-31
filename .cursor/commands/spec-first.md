@@ -251,8 +251,7 @@ After implementation:
 At end of session:
 1. Run `/compound` to extract learnings
 2. Adds patterns/gotchas to spec's `## Learnings` section
-3. Cross-cutting patterns go to `.specs/learnings.md`
-4. Critical rules promoted to `CLAUDE.md`
+3. Cross-cutting patterns go to `.specs/learnings/{category}.md`
 
 ---
 

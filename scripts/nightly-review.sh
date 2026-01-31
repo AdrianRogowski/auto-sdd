@@ -119,12 +119,14 @@ INSTRUCTIONS:
       - Format: '### $(date '+%Y-%m-%d')' followed by bullet points
    
    b) **Cross-cutting learnings**:
-      - Add to .specs/learnings.md under the appropriate category
-      - These are patterns that apply across multiple features
-   
-   c) **Critical rules** (security, architecture, common mistakes):
-      - Add to CLAUDE.md '## Learned Patterns' section
-      - Only promote truly important learnings here
+      - Add to .specs/learnings/{category}.md based on type:
+        - testing.md: Mocking, assertions, test patterns
+        - performance.md: Optimization, lazy loading, caching
+        - security.md: Auth, cookies, validation
+        - api.md: Endpoints, data handling, errors
+        - design.md: Tokens, components, accessibility
+        - general.md: Other patterns
+      - Also add brief entry to .specs/learnings/index.md under "Recent Learnings"
 
 4. UPDATE frontmatter:
    - Set 'updated: $(date '+%Y-%m-%d')' in any modified specs

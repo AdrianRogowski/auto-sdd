@@ -177,8 +177,9 @@ Learnings are extracted and persisted at three levels:
 | Level | Location | Example |
 |-------|----------|---------|
 | Feature-specific | Spec's `## Learnings` | "Login: Safari needs onBlur" |
-| Cross-cutting | `.specs/learnings.md` | "All forms need loading states" |
-| Critical rules | `CLAUDE.md` | "Use httpOnly cookies for auth" |
+| Cross-cutting | `.specs/learnings/{category}.md` | "All forms need loading states" |
+
+Categories: `testing.md`, `performance.md`, `security.md`, `api.md`, `design.md`, `general.md`
 
 ### Overnight Automation
 

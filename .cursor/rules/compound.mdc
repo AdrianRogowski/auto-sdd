@@ -32,30 +32,30 @@ Learnings that apply to a specific feature go in that feature's spec:
   ```
 
 #### Cross-Cutting Learnings
-Learnings that apply across features go in `.specs/learnings.md`:
-- Patterns that apply to multiple features
-- General coding practices for this codebase
-- Testing strategies
-- Design system usage patterns
+Learnings that apply across features go in `.specs/learnings/` by category:
 
-#### Critical Rules
-Learnings important enough to affect ALL future sessions go in `CLAUDE.md`:
-- Security-related patterns
-- Critical architectural decisions
-- Patterns that prevent common mistakes
-- Add to the `## Learned Patterns` section
+| Category | File |
+|----------|------|
+| Testing patterns | `.specs/learnings/testing.md` |
+| Performance | `.specs/learnings/performance.md` |
+| Security | `.specs/learnings/security.md` |
+| API & Data | `.specs/learnings/api.md` |
+| Design System | `.specs/learnings/design.md` |
+| General | `.specs/learnings/general.md` |
+
+Also add a brief entry to `.specs/learnings/index.md` under "Recent Learnings".
 
 ### 3. Update Files
 
 1. **Feature spec(s)**: Add learnings to `## Learnings` section
-2. **Cross-cutting**: Add to `.specs/learnings.md` if it doesn't exist, create it
-3. **Critical**: Add to `CLAUDE.md` `## Learned Patterns` section
+2. **Cross-cutting**: Add to the appropriate `.specs/learnings/{category}.md` file
+3. **Index**: Add brief entry to `.specs/learnings/index.md` under "Recent Learnings"
 4. **Frontmatter**: Update `updated:` date in any modified specs
 
 ### 4. Commit Changes
 
 ```bash
-git add .specs/ CLAUDE.md
+git add .specs/
 git commit -m "compound: learnings from [brief session description]"
 ```
 
@@ -64,7 +64,7 @@ git commit -m "compound: learnings from [brief session description]"
 Tell the user:
 - How many learnings were captured
 - Which files were updated
-- Any learnings promoted to CLAUDE.md
+- Which categories were added to
 
 ---
 
@@ -72,66 +72,55 @@ Tell the user:
 
 | Type | Example | Where to Store |
 |------|---------|----------------|
-| **Pattern** | "Always debounce form validation to avoid API spam" | Feature spec or learnings.md |
+| **Pattern** | "Always debounce form validation to avoid API spam" | Feature spec or `learnings/general.md` |
 | **Gotcha** | "Safari autofill doesn't trigger onChange events" | Feature spec |
-| **Decision** | "Using httpOnly cookies for auth (XSS protection)" | CLAUDE.md if security-related |
+| **Decision** | "Using httpOnly cookies for auth (XSS protection)" | `learnings/security.md` |
 | **Bug Fix** | "Fixed race condition by adding loading state check" | Feature spec |
-| **Performance** | "Memoize expensive calculations in useMemo" | learnings.md |
-| **Testing** | "Mock timers for debounce tests" | learnings.md |
+| **Performance** | "Memoize expensive calculations in useMemo" | `learnings/performance.md` |
+| **Testing** | "Mock timers for debounce tests" | `learnings/testing.md` |
 
 ---
 
-## .specs/learnings.md Format
+## Learnings Folder Structure
 
-If this file doesn't exist, create it:
+Learnings are organized by category in `.specs/learnings/`:
 
-```markdown
-# Cross-Cutting Learnings
-
-Patterns and practices that apply across this codebase.
-
-## Testing
-
-### YYYY-MM-DD
-- [Learning about testing]
-
-## Performance
-
-### YYYY-MM-DD
-- [Learning about performance]
-
-## Design System
-
-### YYYY-MM-DD
-- [Learning about design system usage]
-
-## API & Data
-
-### YYYY-MM-DD
-- [Learning about API patterns]
-
-## General
-
-### YYYY-MM-DD
-- [Other learnings]
+```
+.specs/learnings/
+├── index.md        # Summary + recent learnings
+├── testing.md      # Mocking, assertions, test patterns
+├── performance.md  # Optimization, lazy loading, caching
+├── security.md     # Auth, cookies, validation
+├── api.md          # Endpoints, data handling, errors
+├── design.md       # Tokens, components, accessibility
+└── general.md      # Other patterns
 ```
 
----
+### Format for Category Files
 
-## CLAUDE.md Learned Patterns Format
-
-Add to the `## Learned Patterns` section:
+Add learnings under the appropriate section with a date:
 
 ```markdown
-## Learned Patterns
-
-<!-- Updated by /compound - newest first -->
+## [Section Name]
 
 ### YYYY-MM-DD
-- **[Category]**: [Concise, actionable learning]
+- **Pattern**: [What worked well]
+- **Gotcha**: [Edge case or pitfall]
 
 ### YYYY-MM-DD
-- **[Category]**: [Another learning]
+- **Decision**: [Choice made and rationale]
+```
+
+### Format for index.md Recent Learnings
+
+Add brief entries under "Recent Learnings":
+
+```markdown
+## Recent Learnings
+
+### YYYY-MM-DD
+- **Testing**: Mock fetch globally in setupTests.ts
+- **Security**: Use httpOnly cookies for auth tokens
 ```
 
 ---
@@ -157,15 +146,13 @@ Add to the `## Learned Patterns` section:
 - **Gotcha**: Safari autofill requires onBlur handler as backup
 - **Pattern**: Debounce email validation to 300ms
 
-#### Cross-Cutting (added to learnings.md)
-- **Testing**: Mock fetch globally in setupTests.ts for consistency
-
-#### Promoted to CLAUDE.md
-- None this session
+#### Cross-Cutting (added to learnings/)
+- **Testing**: Mock fetch globally in setupTests.ts → `testing.md`
 
 ### Files Updated
 - `.specs/features/auth/login.feature.md`
-- `.specs/learnings.md`
+- `.specs/learnings/testing.md`
+- `.specs/learnings/index.md`
 
 ---
 

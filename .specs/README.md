@@ -22,8 +22,16 @@ This directory contains the spec-driven development documentation for this proje
 │   └── layouts/           # Page/section layout patterns
 │       └── {layout}.md
 │
+├── learnings/             # Cross-cutting patterns (by category)
+│   ├── index.md           # Summary + recent learnings
+│   ├── testing.md         # Mocking, assertions, test patterns
+│   ├── performance.md     # Optimization, lazy loading, caching
+│   ├── security.md        # Auth, cookies, validation
+│   ├── api.md             # Endpoints, data handling, errors
+│   ├── design.md          # Tokens, components, accessibility
+│   └── general.md         # Other patterns
+│
 ├── mapping.md             # AUTO-GENERATED from spec frontmatter
-├── learnings.md           # Cross-cutting patterns and learnings
 ├── codebase-summary.md    # Generated overview (after /spec-init)
 ├── needs-review.md        # Files needing manual attention
 └── README.md              # This file
@@ -221,6 +229,26 @@ The mapping provides a routing table for the agent to find specs, tests, and com
 | `/check-coverage` | Find gaps in coverage |
 | `/catch-drift` | Detect spec ↔ code drift |
 | `/verify-test-counts` | Reconcile test counts |
+
+---
+
+## Learnings Folder
+
+Cross-cutting learnings are organized by category in `.specs/learnings/`:
+
+| File | Category |
+|------|----------|
+| `index.md` | Summary + recent learnings (read this first) |
+| `testing.md` | Mocking, assertions, test structure |
+| `performance.md` | Lazy loading, caching, bundle size |
+| `security.md` | Auth, cookies, validation, secrets |
+| `api.md` | Endpoints, error handling, data shapes |
+| `design.md` | Tokens, components, a11y, responsive |
+| `general.md` | Everything else |
+
+Feature-specific learnings go in each spec's `## Learnings` section.
+
+Run `/compound` at the end of sessions to extract and route learnings.
 
 ---
 
