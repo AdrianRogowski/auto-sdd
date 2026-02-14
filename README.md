@@ -125,9 +125,26 @@ Or from an existing app:
 ```
 11:00 PM  /roadmap-triage (scan Slack/Jira → add to roadmap)
           /build-next × MAX_FEATURES (build from roadmap)
+            └─ Each feature: build → drift check (fresh agent) → commit
           Create draft PRs
- 7:00 AM  You review 3-4 draft PRs
+ 7:00 AM  You review 3-4 draft PRs (specs verified against code)
 ```
+
+### Drift Enforcement
+
+Every feature build is verified at two layers:
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   BUILD     │ ──▶ │ SELF-CHECK  │ ──▶ │ FRESH-AGENT │ ──▶ │   COMMIT    │
+│ (spec-first │     │  (Layer 1)  │     │ DRIFT CHECK │     │  (only if   │
+│  --full)    │     │ same agent  │     │  (Layer 2)  │     │ drift-free) │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+```
+
+- **Layer 1**: Build agent re-reads its own spec and compares to implementation (cheap, same context)
+- **Layer 2**: Separate agent reads spec + code cold, reports `NO_DRIFT` / `DRIFT_FIXED` / `DRIFT_UNRESOLVABLE`
+- Feature only passes if both layers are clean
 
 ## Slash Commands
 

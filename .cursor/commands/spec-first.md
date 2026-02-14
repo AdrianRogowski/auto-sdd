@@ -282,13 +282,29 @@ After creating the spec, provide this summary:
 5. Loop until all tests pass
 6. Update spec frontmatter: `status: implemented`, add components to `components: []`
 
-### Step 4: Document Components
+### Step 4: Self-Check Drift (Full Mode: automatic, Normal Mode: optional)
+
+Before documenting or extracting learnings, verify your implementation matches your spec:
+
+1. Re-read the Gherkin scenarios you wrote in Step 1
+2. For each scenario, verify the code you just wrote implements it
+3. Check for behaviors you implemented that aren't in the spec
+4. Check for scenarios in the spec that aren't implemented
+
+**If drift found:**
+- Update the spec to match what you actually built (document reality)
+- Or fix the code to match the spec (if you missed something)
+- Ensure tests still pass after any changes
+
+**Why this matters:** This is Layer 1 of drift enforcement — a quick self-check while you still have full context. The build loop will run a separate Layer 2 check with a fresh agent afterward, but catching obvious drift here is cheaper.
+
+### Step 5: Document Components
 After implementation:
 1. Fill in component stubs with actual implementation details
 2. Update stub status from "📝 Stub" to "✅ Documented"
 3. Or use `/design-component {name}` to auto-document
 
-### Step 5: Compound Learnings
+### Step 6: Compound Learnings
 **Normal Mode**: Optional - user can run `/compound` at end of session
 **Full Mode**: Automatically run /compound after implementation
 
@@ -296,13 +312,22 @@ After implementation:
 2. Adds patterns/gotchas to spec's `## Learnings` section
 3. Cross-cutting patterns go to `.specs/learnings/{category}.md`
 
-### Step 6: Commit (Full Mode Only)
+### Step 7: Commit (Full Mode Only)
 
 **Full Mode only** - after /compound completes:
 1. Regenerate mapping: `./scripts/generate-mapping.sh`
 2. Stage all changes: `git add .specs/ src/ tests/`
 3. Commit with message: `feat: {feature name} (full TDD cycle)`
 4. Report completion to user
+
+**REQUIRED output signals** (for build loop parsing):
+```
+FEATURE_BUILT: {feature name}
+SPEC_FILE: {path to .feature.md file}
+SOURCE_FILES: {comma-separated paths to source files created/modified}
+```
+
+These signals enable the automated drift-check that runs after your commit.
 
 ---
 

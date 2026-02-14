@@ -372,10 +372,61 @@ Status symbols:
 1. `/vision` or `/clone-app` creates vision.md
 2. `/roadmap` or `/clone-app` creates roadmap.md
 3. `/build-next` picks next pending feature (deps met)
-4. Runs `/spec-first --full` to build it
-5. Updates roadmap status
-6. Repeat until done
+4. Runs `/spec-first --full` to build it (includes self-check drift)
+5. Build loop runs fresh-agent drift check (Layer 2)
+6. Updates roadmap status
+7. Repeat until done
 
 ### Triage
 
 `/roadmap-triage` scans Slack/Jira and adds items to the "Ad-hoc Requests" section of roadmap.md.
+
+---
+
+## Drift Enforcement
+
+Spec↔code drift is enforced at two layers:
+
+### Layer 1: Self-Check (same agent, lightweight)
+
+Built into `/spec-first --full` between implement and compound:
+- The build agent re-reads its own Gherkin scenarios
+- Compares against what it actually implemented
+- Fixes obvious mismatches before committing
+
+This is cheap (same context) but has the "fox guarding henhouse" limitation.
+
+### Layer 2: Fresh-Agent Cross-Check (separate agent, thorough)
+
+Built into `build-loop-local.sh` and `overnight-autonomous.sh`:
+- After the build agent commits, a **separate agent** is spawned
+- It reads the spec file and source files with fresh context
+- Reports `NO_DRIFT`, `DRIFT_FIXED`, or `DRIFT_UNRESOLVABLE`
+- Feature is only marked complete if drift is clean
+
+### Signal Protocol
+
+The build agent MUST output these signals for drift checking:
+
+```
+FEATURE_BUILT: {feature name}
+SPEC_FILE: {path to .feature.md file}
+SOURCE_FILES: {comma-separated source file paths}
+```
+
+The drift-check agent MUST output one of:
+
+```
+NO_DRIFT
+DRIFT_FIXED: {summary of what was reconciled}
+DRIFT_UNRESOLVABLE: {what needs human attention}
+```
+
+### Configuration
+
+In `.env.local`:
+
+```bash
+DRIFT_CHECK=true          # Enable/disable drift checking (default: true)
+MAX_DRIFT_RETRIES=1       # Retry attempts for fixing drift (default: 1)
+```

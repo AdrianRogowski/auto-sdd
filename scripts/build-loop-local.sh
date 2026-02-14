@@ -29,6 +29,16 @@
 #     BUILD_CHECK_CMD="python -m py_compile main.py"
 #     BUILD_CHECK_CMD="cargo check"
 #     BUILD_CHECK_CMD="skip"
+#
+# DRIFT_CHECK: whether to run spec↔code drift detection after each feature.
+#   Defaults to "true". Set to "false" to disable.
+#   When enabled, a SEPARATE agent invocation reads the spec and source files
+#   after the build agent commits, comparing them with fresh context.
+#   This catches mismatches the build agent missed (fox-guarding-henhouse problem).
+#
+# MAX_DRIFT_RETRIES: how many times to retry fixing drift (default: 1).
+#   If drift is found, the drift agent auto-fixes by updating specs.
+#   If the fix breaks the build, it retries up to this many times.
 
 set -e
 
@@ -42,6 +52,8 @@ fi
 MAX_FEATURES="${MAX_FEATURES:-25}"
 MAX_RETRIES="${MAX_RETRIES:-1}"
 BRANCH_STRATEGY="${BRANCH_STRATEGY:-chained}"
+DRIFT_CHECK="${DRIFT_CHECK:-true}"
+MAX_DRIFT_RETRIES="${MAX_DRIFT_RETRIES:-1}"
 
 log() { echo "[$(date '+%H:%M:%S')] $1"; }
 success() { echo "[$(date '+%H:%M:%S')] ✓ $1"; }
@@ -152,6 +164,113 @@ check_build() {
     fi
 }
 
+# ── Drift check helpers ──────────────────────────────────────────────────
+
+# Extract spec file and source files from build output or git diff.
+# Sets: DRIFT_SPEC_FILE, DRIFT_SOURCE_FILES
+extract_drift_targets() {
+    local build_result="$1"
+
+    # Try to extract from agent's structured output first
+    DRIFT_SPEC_FILE=$(echo "$build_result" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | xargs 2>/dev/null || echo "")
+    DRIFT_SOURCE_FILES=$(echo "$build_result" | grep "^SOURCE_FILES:" | tail -1 | cut -d: -f2- | xargs 2>/dev/null || echo "")
+
+    # Fallback: derive from git diff if agent didn't provide them
+    if [ -z "$DRIFT_SPEC_FILE" ]; then
+        DRIFT_SPEC_FILE=$(git diff HEAD~1 --name-only 2>/dev/null | grep '\.specs/features/.*\.feature\.md$' | head -1 || echo "")
+    fi
+    if [ -z "$DRIFT_SOURCE_FILES" ]; then
+        DRIFT_SOURCE_FILES=$(git diff HEAD~1 --name-only 2>/dev/null | grep -E '\.(tsx?|jsx?|py|rs|go)$' | grep -v '\.test\.' | grep -v '\.spec\.' | tr '\n' ', ' | sed 's/,$//' || echo "")
+    fi
+}
+
+# Run catch-drift via a fresh agent invocation.
+# Args: $1 = spec file path, $2 = comma-separated source files
+# Returns 0 if no drift (or drift was fixed), 1 if unresolvable drift.
+check_drift() {
+    if [ "$DRIFT_CHECK" != "true" ]; then
+        log "Drift check disabled (set DRIFT_CHECK=true to enable)"
+        return 0
+    fi
+
+    local spec_file="$1"
+    local source_files="$2"
+
+    if [ -z "$spec_file" ]; then
+        warn "No spec file found — skipping drift check"
+        return 0
+    fi
+
+    log "Running drift check (fresh agent)..."
+    log "  Spec: $spec_file"
+    log "  Source: ${source_files:-<detected from spec>}"
+
+    local drift_attempt=0
+    while [ "$drift_attempt" -le "$MAX_DRIFT_RETRIES" ]; do
+        if [ "$drift_attempt" -gt 0 ]; then
+            warn "Drift fix retry $drift_attempt/$MAX_DRIFT_RETRIES"
+        fi
+
+        DRIFT_OUTPUT=$(mktemp)
+
+        local drift_prompt="
+Run /catch-drift for this specific feature. This is an automated check — do NOT ask for user input. Auto-fix all drift by updating specs to match code (prefer documenting reality over reverting code).
+
+Spec file: $spec_file
+Source files: $source_files
+
+Instructions:
+1. Read the spec file and all its Gherkin scenarios
+2. Read each source file listed above
+3. Compare: does the code implement what the spec describes?
+4. Check: are there behaviors in code not covered by the spec?
+5. Check: are there scenarios in the spec not implemented in code?
+6. If drift found: update the spec to match the code (document reality)
+7. If tests need updating, update them too
+8. Commit any fixes with message: 'fix: reconcile spec drift for {feature}'
+
+IMPORTANT: Output EXACTLY ONE of these signals at the end:
+NO_DRIFT
+DRIFT_FIXED: {brief summary of what was reconciled}
+DRIFT_UNRESOLVABLE: {what needs human attention and why}
+"
+        agent -p --force --output-format text "$drift_prompt" 2>&1 | tee "$DRIFT_OUTPUT" || true
+        DRIFT_RESULT=$(cat "$DRIFT_OUTPUT")
+        rm -f "$DRIFT_OUTPUT"
+
+        if echo "$DRIFT_RESULT" | grep -q "NO_DRIFT"; then
+            success "Drift check passed — spec and code are aligned"
+            return 0
+        fi
+
+        if echo "$DRIFT_RESULT" | grep -q "DRIFT_FIXED"; then
+            local fix_summary
+            fix_summary=$(echo "$DRIFT_RESULT" | grep "DRIFT_FIXED" | tail -1 | cut -d: -f2- | xargs)
+            success "Drift detected and auto-fixed: $fix_summary"
+            # Verify the fix didn't break the build
+            if check_build; then
+                return 0
+            else
+                warn "Drift fix broke the build — retrying"
+            fi
+        fi
+
+        if echo "$DRIFT_RESULT" | grep -q "DRIFT_UNRESOLVABLE"; then
+            local unresolvable_reason
+            unresolvable_reason=$(echo "$DRIFT_RESULT" | grep "DRIFT_UNRESOLVABLE" | tail -1 | cut -d: -f2- | xargs)
+            warn "Unresolvable drift: $unresolvable_reason"
+            return 1
+        fi
+
+        # No clear signal — treat as drift found but not fixed
+        warn "Drift check did not produce a clear signal"
+        drift_attempt=$((drift_attempt + 1))
+    done
+
+    fail "Drift check failed after $((MAX_DRIFT_RETRIES + 1)) attempt(s)"
+    return 1
+}
+
 # ── Branch strategy helpers ────────────────────────────────────────────────
 
 setup_branch_chained() {
@@ -243,10 +362,19 @@ CRITICAL IMPLEMENTATION RULES (from roadmap):
 - Features must work end-to-end with real user data or they are not done.
 - Real validation, real error handling, real flows.
 
-After completion, output exactly one of:
+After completion, output EXACTLY these signals (each on its own line):
 FEATURE_BUILT: {feature name}
+SPEC_FILE: {path to the .feature.md file you created/updated}
+SOURCE_FILES: {comma-separated paths to source files created/modified}
+
+Or if no features are ready:
 NO_FEATURES_READY
+
+Or if build fails:
 BUILD_FAILED: {reason}
+
+The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported.
+They are used by the automated drift-check that runs after your build.
 '
 
 RETRY_PROMPT_TEMPLATE='
@@ -262,8 +390,12 @@ Your job:
 
 CRITICAL: Do NOT use mock data, fake JSON, or placeholder content. All features must use real DB queries and real API calls.
 
-After completion, output exactly one of:
+After completion, output EXACTLY these signals (each on its own line):
 FEATURE_BUILT: {feature name}
+SPEC_FILE: {path to the .feature.md file}
+SOURCE_FILES: {comma-separated paths to source files created/modified}
+
+Or if build fails:
 BUILD_FAILED: {reason}
 '
 
@@ -360,17 +492,23 @@ run_build_loop() {
                 if check_working_tree_clean; then
                     # Verify: does it actually build?
                     if check_build; then
-                        LOOP_BUILT=$((LOOP_BUILT + 1))
-                        local feature_end=$(date +%s)
-                        local feature_duration=$((feature_end - FEATURE_START))
-                        success "Feature $LOOP_BUILT built: $feature_name ($(format_duration $feature_duration))"
-                        LOOP_TIMINGS+=("✓ $feature_name: $(format_duration $feature_duration)")
-                        feature_done=true
+                        # Verify: spec and code are aligned (fresh agent)
+                        extract_drift_targets "$BUILD_RESULT"
+                        if check_drift "$DRIFT_SPEC_FILE" "$DRIFT_SOURCE_FILES"; then
+                            LOOP_BUILT=$((LOOP_BUILT + 1))
+                            local feature_end=$(date +%s)
+                            local feature_duration=$((feature_end - FEATURE_START))
+                            success "Feature $LOOP_BUILT built: $feature_name ($(format_duration $feature_duration))"
+                            LOOP_TIMINGS+=("✓ $feature_name: $(format_duration $feature_duration)")
+                            feature_done=true
 
-                        # Track feature name for 'both' mode
-                        BUILT_FEATURE_NAMES+=("$feature_name")
+                            # Track feature name for 'both' mode
+                            BUILT_FEATURE_NAMES+=("$feature_name")
 
-                        break
+                            break
+                        else
+                            warn "Agent said FEATURE_BUILT but drift check failed"
+                        fi
                     else
                         warn "Agent said FEATURE_BUILT but build check failed"
                     fi
@@ -450,6 +588,11 @@ if [ -n "$BUILD_CMD" ]; then
     echo "Build check: $BUILD_CMD"
 else
     echo "Build check: disabled (set BUILD_CHECK_CMD to enable)"
+fi
+if [ "$DRIFT_CHECK" = "true" ]; then
+    echo "Drift check: enabled (max retries: $MAX_DRIFT_RETRIES)"
+else
+    echo "Drift check: disabled (set DRIFT_CHECK=true to enable)"
 fi
 echo ""
 

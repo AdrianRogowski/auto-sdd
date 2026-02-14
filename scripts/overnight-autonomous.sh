@@ -59,6 +59,8 @@ fi
 # Defaults
 MAX_FEATURES="${MAX_FEATURES:-4}"
 BRANCH_STRATEGY="${BRANCH_STRATEGY:-chained}"
+DRIFT_CHECK="${DRIFT_CHECK:-true}"
+MAX_DRIFT_RETRIES="${MAX_DRIFT_RETRIES:-1}"
 SLACK_FEATURE_CHANNEL="${SLACK_FEATURE_CHANNEL:-#feature-requests}"
 SLACK_REPORT_CHANNEL="${SLACK_REPORT_CHANNEL:-}"
 JIRA_PROJECT_KEY="${JIRA_PROJECT_KEY:-}"
@@ -88,6 +90,79 @@ fi
 if ! command -v gh &> /dev/null; then
     warn "GitHub CLI (gh) not found - PRs won't be created"
 fi
+
+# ── Drift check helpers ──────────────────────────────────────────────────
+
+extract_drift_targets() {
+    local build_result="$1"
+    DRIFT_SPEC_FILE=$(echo "$build_result" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | xargs 2>/dev/null || echo "")
+    DRIFT_SOURCE_FILES=$(echo "$build_result" | grep "^SOURCE_FILES:" | tail -1 | cut -d: -f2- | xargs 2>/dev/null || echo "")
+    if [ -z "$DRIFT_SPEC_FILE" ]; then
+        DRIFT_SPEC_FILE=$(git diff HEAD~1 --name-only 2>/dev/null | grep '\.specs/features/.*\.feature\.md$' | head -1 || echo "")
+    fi
+    if [ -z "$DRIFT_SOURCE_FILES" ]; then
+        DRIFT_SOURCE_FILES=$(git diff HEAD~1 --name-only 2>/dev/null | grep -E '\.(tsx?|jsx?|py|rs|go)$' | grep -v '\.test\.' | grep -v '\.spec\.' | tr '\n' ', ' | sed 's/,$//' || echo "")
+    fi
+}
+
+check_drift() {
+    if [ "$DRIFT_CHECK" != "true" ]; then
+        log "Drift check disabled"
+        return 0
+    fi
+    local spec_file="$1"
+    local source_files="$2"
+    if [ -z "$spec_file" ]; then
+        warn "No spec file found — skipping drift check"
+        return 0
+    fi
+    log "Running drift check (fresh agent)..."
+    log "  Spec: $spec_file"
+    log "  Source: ${source_files:-<detected from spec>}"
+
+    local drift_attempt=0
+    while [ "$drift_attempt" -le "$MAX_DRIFT_RETRIES" ]; do
+        DRIFT_OUTPUT=$(mktemp)
+        agent -p --force --output-format text "
+Run /catch-drift for this specific feature. Auto-fix all drift by updating specs to match code.
+
+Spec file: $spec_file
+Source files: $source_files
+
+Instructions:
+1. Read the spec file and all its Gherkin scenarios
+2. Read each source file
+3. Compare: does the code implement what the spec describes?
+4. If drift found: update the spec to match the code
+5. Commit any fixes with message: 'fix: reconcile spec drift for {feature}'
+
+Output EXACTLY ONE of:
+NO_DRIFT
+DRIFT_FIXED: {brief summary}
+DRIFT_UNRESOLVABLE: {what needs human attention}
+" 2>&1 | tee "$DRIFT_OUTPUT" || true
+        DRIFT_RESULT=$(cat "$DRIFT_OUTPUT")
+        rm -f "$DRIFT_OUTPUT"
+
+        if echo "$DRIFT_RESULT" | grep -q "NO_DRIFT"; then
+            success "Drift check passed"
+            return 0
+        fi
+        if echo "$DRIFT_RESULT" | grep -q "DRIFT_FIXED"; then
+            local fix_summary
+            fix_summary=$(echo "$DRIFT_RESULT" | grep "DRIFT_FIXED" | tail -1 | cut -d: -f2- | xargs)
+            success "Drift auto-fixed: $fix_summary"
+            return 0
+        fi
+        if echo "$DRIFT_RESULT" | grep -q "DRIFT_UNRESOLVABLE"; then
+            warn "Unresolvable drift: $(echo "$DRIFT_RESULT" | grep "DRIFT_UNRESOLVABLE" | tail -1 | cut -d: -f2- | xargs)"
+            return 1
+        fi
+        drift_attempt=$((drift_attempt + 1))
+    done
+    fail "Drift check failed"
+    return 1
+}
 
 # ─────────────────────────────────────────────
 # STEP 0: Ensure we're on main and up to date
@@ -227,12 +302,15 @@ Run the /build-next command to:
 4. If no features are ready, output: NO_FEATURES_READY
 5. If build fails, output: BUILD_FAILED: {reason}
 
-After completion, output:
+After completion, output EXACTLY these signals (each on its own line):
 FEATURE_BUILT: {feature name}
-or
-NO_FEATURES_READY
-or
-BUILD_FAILED: {reason}
+SPEC_FILE: {path to the .feature.md file you created/updated}
+SOURCE_FILES: {comma-separated paths to source files created/modified}
+
+Or: NO_FEATURES_READY
+Or: BUILD_FAILED: {reason}
+
+The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported.
 " > "$BUILD_OUTPUT" 2>&1 || true
     
     BUILD_RESULT=$(cat "$BUILD_OUTPUT")
@@ -266,6 +344,15 @@ BUILD_FAILED: {reason}
         FEATURE_NAME="${FEATURE_NAME:-feature}"
         
         git commit -m "feat(auto): $FEATURE_NAME" 2>/dev/null || true
+        
+        # Run drift check (fresh agent, separate context)
+        extract_drift_targets "$BUILD_RESULT"
+        if ! check_drift "$DRIFT_SPEC_FILE" "$DRIFT_SOURCE_FILES"; then
+            FEATURE_DURATION=$(( $(date +%s) - FEATURE_START ))
+            warn "Feature built but drift check failed ($(format_duration $FEATURE_DURATION))"
+            FEATURE_TIMINGS+=("⚠ $FEATURE_NAME (drift): $(format_duration $FEATURE_DURATION)")
+            # Continue to push — drift is documented in the PR for human review
+        fi
         
         # Push and create PR
         if git push -u origin "$BRANCH_NAME" 2>/dev/null; then

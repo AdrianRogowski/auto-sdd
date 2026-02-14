@@ -62,10 +62,23 @@ Check if `--full` or `--auto` flag is present in the arguments:
 1. Implement until tests pass using design tokens
 2. Update frontmatter: `status: implemented`, add components to `components: []`
 
-**Step 4: Compound (Full Mode runs automatically)**
+**Step 4: Self-Check Drift (Full Mode: automatic, Normal Mode: optional)**
+1. Re-read your Gherkin scenarios
+2. Verify each scenario is implemented in the code you wrote
+3. Check for behaviors in code not in spec (or vice versa)
+4. Fix any drift: update spec to match code, or fix code to match spec
+5. Ensure tests still pass
+
+**Step 5: Compound (Full Mode runs automatically)**
 1. Run `/compound` to extract learnings
 2. Update `.specs/learnings/{category}.md`
 
-**Step 5: Commit (Full Mode only)**
+**Step 6: Commit (Full Mode only)**
 1. Regenerate mapping: `./scripts/generate-mapping.sh`
 2. Commit all changes: `feat: {feature name} (full TDD cycle)`
+3. Output these signals (REQUIRED for build loop):
+   ```
+   FEATURE_BUILT: {feature name}
+   SPEC_FILE: {path to .feature.md file}
+   SOURCE_FILES: {comma-separated source file paths}
+   ```

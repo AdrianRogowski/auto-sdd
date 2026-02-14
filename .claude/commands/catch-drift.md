@@ -45,3 +45,19 @@ After reconciliation:
 ## Output
 
 Drift report with specific discrepancies, line numbers, and suggestions.
+
+## Automated Mode (Build Loop)
+
+When invoked by build scripts, auto-fix drift without asking (update specs to match code).
+
+### Signal Protocol
+
+Output EXACTLY ONE at the end:
+
+- `NO_DRIFT` — spec and code are aligned
+- `DRIFT_FIXED: {summary}` — drift found and auto-reconciled
+- `DRIFT_UNRESOLVABLE: {reason}` — needs human decision
+
+### Input Format
+
+Build loop provides: `Spec file: {path}` and `Source files: {paths}`. Read only those files.

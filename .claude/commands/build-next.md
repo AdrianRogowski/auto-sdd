@@ -15,9 +15,10 @@ Pick the next pending feature from the roadmap and build it through the full TDD
 
 1. **Select** - Find the next buildable feature (pending, dependencies met)
 2. **Spec** - Create feature spec with `/spec-first --full`
-3. **Build** - Implement through TDD cycle
+3. **Build** - Implement through TDD cycle (includes self-check drift)
 4. **Update** - Mark roadmap as complete, sync Jira
-5. **PR** - Create PR (if in overnight mode)
+5. **Drift Check** - Build loop runs a fresh agent to verify spec↔code alignment
+6. **PR** - Create PR (if in overnight mode)
 
 ---
 
@@ -196,6 +197,18 @@ No additional action needed here - learnings are already extracted.
 
 ## Step 12: Report Status
 
+### Required Output Signals
+
+You MUST output these signals at the end (each on its own line):
+
+```
+FEATURE_BUILT: {feature name}
+SPEC_FILE: {path to .feature.md file}
+SOURCE_FILES: {comma-separated source file paths}
+```
+
+These are parsed by the build loop to run automated drift-checking.
+
 ### If Feature Built Successfully
 
 ```
@@ -207,6 +220,10 @@ Components: [list of components]
 Jira: PROJ-105 → Done
 
 Roadmap progress: 5/18 features (28%)
+
+FEATURE_BUILT: Dashboard
+SPEC_FILE: .specs/features/dashboard/dashboard.feature.md
+SOURCE_FILES: app/(protected)/dashboard/page.tsx, components/dashboard-stats.tsx
 
 Run /build-next again to continue, or wait for overnight automation.
 ```
@@ -291,12 +308,18 @@ Agent:
    - Creates spec
    - Writes tests
    - Implements
+   - Self-checks drift (Layer 1)
    - Tests pass
    - Extracts learnings (/compound)
 8. Updates roadmap: #5 → ✅
 9. Syncs Jira: PROJ-105 → Done + comment
-10. Reports success
+10. Reports success with signals
+11. Build loop runs fresh-agent drift check (Layer 2)
 
 ✅ Feature #5 built: Dashboard
 Roadmap progress: 5/18 (28%)
+
+FEATURE_BUILT: Dashboard
+SPEC_FILE: .specs/features/dashboard/dashboard.feature.md
+SOURCE_FILES: app/(protected)/dashboard/page.tsx, components/dashboard-stats.tsx
 ```

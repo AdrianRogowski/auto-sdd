@@ -191,16 +191,60 @@ Comprehensive check of all specs. May take a while.
 ```
 Verify all deal-related specs are accurate before shipping.
 
+## Automated Mode (Build Loop Integration)
+
+When `/catch-drift` is invoked by the build loop (`build-loop-local.sh` or `overnight-autonomous.sh`), it runs in **automated mode**:
+
+- **Do NOT ask for user input** — auto-fix all drift
+- **Default action**: Update specs to match code (document reality)
+- **Always commit fixes** with message: `fix: reconcile spec drift for {feature}`
+
+### Signal Protocol
+
+When running in automated mode, you MUST output **exactly one** of these signals at the end of your response:
+
+| Signal | Meaning | When to Use |
+|--------|---------|-------------|
+| `NO_DRIFT` | Spec and code are fully aligned | All scenarios match implementation |
+| `DRIFT_FIXED: {summary}` | Drift was found and auto-reconciled | Spec updated, tests updated, committed |
+| `DRIFT_UNRESOLVABLE: {reason}` | Drift found but can't auto-fix | Needs human decision (e.g., ambiguous intent) |
+
+### Automated Mode Input
+
+The build loop provides exact file paths:
+
+```
+Spec file: .specs/features/auth/login.feature.md
+Source files: app/api/auth/route.ts, components/login-form.tsx
+```
+
+When these are provided:
+1. Read ONLY the specified spec file (don't scan the whole `.specs/` directory)
+2. Read ONLY the specified source files
+3. Compare scenarios to implementation
+4. Fix and output signal
+
+### Fallback Detection
+
+If no file paths are provided (manual invocation), fall back to:
+1. Use `git diff HEAD~1 --name-only` to find recently changed files
+2. Match `.feature.md` files to their corresponding source files
+3. Or scan based on the user's description
+
+---
+
 ## Drift Prevention Tips
 
 To minimize drift:
 1. Always update spec when making "quick fixes"
 2. Run `/catch-drift` before PRs
 3. Include spec updates in code review checklist
-4. Set up periodic drift audits (weekly/sprint)
+4. The build loop runs `/catch-drift` automatically after each feature (with a fresh agent context)
 
 ## Integration with Other Commands
 
+- `/spec-first --full` includes a self-check drift step (Layer 1, same agent)
+- `build-loop-local.sh` runs `/catch-drift` as a separate agent (Layer 2, fresh context)
 - After `/catch-drift`, use `/update-test-docs` to sync test documentation
 - If drift reveals missing coverage, use `/check-coverage` for full audit
 - If code needs to change, use `/fix-bug` or `/refactor` workflow
