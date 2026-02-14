@@ -42,12 +42,21 @@ fi
 
 # Defaults
 MAX_FEATURES="${MAX_FEATURES:-4}"
+BRANCH_STRATEGY="${BRANCH_STRATEGY:-chained}"
 SLACK_FEATURE_CHANNEL="${SLACK_FEATURE_CHANNEL:-#feature-requests}"
 SLACK_REPORT_CHANNEL="${SLACK_REPORT_CHANNEL:-}"
 JIRA_PROJECT_KEY="${JIRA_PROJECT_KEY:-}"
 
+# Validate BRANCH_STRATEGY
+if [[ ! "$BRANCH_STRATEGY" =~ ^(chained|independent)$ ]]; then
+    warn "Invalid BRANCH_STRATEGY: $BRANCH_STRATEGY (must be: chained or independent)"
+    warn "Using default: chained"
+    BRANCH_STRATEGY="chained"
+fi
+
 section "OVERNIGHT AUTONOMOUS RUN"
 log "Project: $PROJECT_DIR"
+log "Branch strategy: $BRANCH_STRATEGY"
 log "Max features: $MAX_FEATURES"
 log "Slack channel: $SLACK_FEATURE_CHANNEL"
 log "Jira project: ${JIRA_PROJECT_KEY:-not configured}"
@@ -142,15 +151,34 @@ section "STEP 3: Build features from roadmap"
 
 BUILT=0
 FAILED=0
+LAST_FEATURE_BRANCH=""
 
 for i in $(seq 1 "$MAX_FEATURES"); do
     log "Build iteration $i/$MAX_FEATURES..."
     
-    # Create a new branch for this feature
+    # Create a new branch for this feature based on strategy
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
     BRANCH_NAME="auto/feature-$TIMESTAMP"
     
-    git checkout "$MAIN_BRANCH"
+    if [ "$BRANCH_STRATEGY" = "chained" ]; then
+        # Chained: Branch from previous feature's branch (or main if first)
+        base_branch="${LAST_FEATURE_BRANCH:-$MAIN_BRANCH}"
+        if [ "$base_branch" != "$MAIN_BRANCH" ]; then
+            log "Branching from previous feature: $base_branch"
+            git checkout "$base_branch" 2>/dev/null || {
+                warn "Previous branch $base_branch not found, using $MAIN_BRANCH"
+                base_branch="$MAIN_BRANCH"
+                git checkout "$base_branch"
+            }
+        else
+            log "Branching from $MAIN_BRANCH (first feature)"
+            git checkout "$MAIN_BRANCH"
+        fi
+    else
+        # Independent: Always branch from main
+        git checkout "$MAIN_BRANCH"
+    fi
+    
     git checkout -b "$BRANCH_NAME"
     
     # Run /build-next
@@ -253,10 +281,18 @@ EOF
                 if [ -n "$PR_URL" ]; then
                     success "Created PR: $PR_URL"
                     BUILT=$((BUILT + 1))
+                    # Track branch for chained mode
+                    if [ "$BRANCH_STRATEGY" = "chained" ]; then
+                        LAST_FEATURE_BRANCH="$BRANCH_NAME"
+                    fi
                 fi
             else
                 success "Branch pushed (PR not created - gh CLI unavailable)"
                 BUILT=$((BUILT + 1))
+                # Track branch for chained mode
+                if [ "$BRANCH_STRATEGY" = "chained" ]; then
+                    LAST_FEATURE_BRANCH="$BRANCH_NAME"
+                fi
             fi
         else
             error "Failed to push branch $BRANCH_NAME"
@@ -267,8 +303,10 @@ EOF
         git branch -D "$BRANCH_NAME" 2>/dev/null || true
     fi
     
-    # Return to main for next iteration
-    git checkout "$MAIN_BRANCH" 2>/dev/null
+    # Return to main for next iteration (unless chained mode)
+    if [ "$BRANCH_STRATEGY" != "chained" ]; then
+        git checkout "$MAIN_BRANCH" 2>/dev/null
+    fi
 done
 
 # ─────────────────────────────────────────────
