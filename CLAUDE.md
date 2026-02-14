@@ -20,7 +20,7 @@ This project uses a spec-driven development workflow. Follow these rules in all 
 
 ```
 .specs/
-├── vision.md              # App vision (created by /clone-app)
+├── vision.md              # App vision (created by /vision or /clone-app)
 ├── roadmap.md             # Feature roadmap (single source of truth)
 ├── features/              # Gherkin specs with ASCII mockups
 │   └── {domain}/
@@ -201,6 +201,8 @@ When new components are created:
 ### Roadmap Commands
 | Command | Purpose |
 |---------|---------|
+| `/vision` | Create or update vision.md from description, Jira, or Confluence |
+| `/roadmap` | Create, update, or restructure roadmap.md |
 | `/clone-app <url>` | Analyze app → create vision.md + roadmap.md |
 | `/build-next` | Build next pending feature from roadmap |
 | `/roadmap-triage` | Scan Slack/Jira → add to roadmap |
@@ -334,7 +336,7 @@ High-level app description:
 - Key screens
 - Tech stack
 
-Created by `/clone-app <url>`.
+Created by `/vision` (from description, Jira, or Confluence) or `/clone-app <url>` (from a live app).
 
 ### roadmap.md
 
@@ -354,13 +356,25 @@ Status symbols:
 - ⏸️ Blocked
 - ❌ Cancelled
 
+### Creating and Updating
+
+| Command | Purpose |
+|---------|---------|
+| `/vision` | Create or update vision.md from description, Jira, or Confluence |
+| `/roadmap` | Create, add features, reprioritize, or check status |
+| `/roadmap add "feature"` | Add a feature or phase to existing roadmap |
+| `/roadmap reprioritize` | Restructure phases and reorder features |
+| `/roadmap status` | Read-only progress report |
+| `/clone-app <url>` | Analyze a live app → create both vision.md + roadmap.md |
+
 ### Building from Roadmap
 
-1. `/clone-app` creates vision.md + roadmap.md
-2. `/build-next` picks next pending feature (deps met)
-3. Runs `/spec-first --full` to build it
-4. Updates roadmap status
-5. Repeat until done
+1. `/vision` or `/clone-app` creates vision.md
+2. `/roadmap` or `/clone-app` creates roadmap.md
+3. `/build-next` picks next pending feature (deps met)
+4. Runs `/spec-first --full` to build it
+5. Updates roadmap status
+6. Repeat until done
 
 ### Triage
 

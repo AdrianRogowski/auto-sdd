@@ -68,4 +68,5 @@
 
 ---
 
-_This file is created by `/clone-app` and serves as the north star for `/build-next` decisions._
+_This file is created by `/vision` or `/clone-app` and serves as the north star for `/build-next` decisions._
+_Update with `/vision --update` to reflect what's been built and learned._

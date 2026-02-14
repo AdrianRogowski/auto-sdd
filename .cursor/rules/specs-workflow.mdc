@@ -263,6 +263,16 @@ Then [expected result]
 | `/formalize` | Convert prototype to production code with full specs |
 | `/compound` | Extract and persist learnings from current session |
 
+### Roadmap Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/vision` | Create or update vision.md from description, Jira, or Confluence |
+| `/roadmap` | Create, add features, reprioritize, or check roadmap status |
+| `/clone-app <url>` | Analyze app → create vision.md + roadmap.md |
+| `/build-next` | Build next pending feature from roadmap |
+| `/roadmap-triage` | Scan Slack/Jira → add to roadmap |
+
 ### Design System Commands
 
 | Command | Purpose |

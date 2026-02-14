@@ -1,7 +1,7 @@
 # Build Roadmap
 
 > Ordered list of features to implement. Each feature should be completable within a single agent context window.
-> Updated by `/clone-app`, `/roadmap-triage`, and `/build-next`.
+> Updated by `/roadmap`, `/clone-app`, `/roadmap-triage`, and `/build-next`.
 
 ## Implementation Rules
 
@@ -99,3 +99,4 @@
 ---
 
 _This file is the single source of truth for `/build-next`. Features are picked in order, respecting dependencies._
+_Create with `/roadmap create`, add features with `/roadmap add`, restructure with `/roadmap reprioritize`._

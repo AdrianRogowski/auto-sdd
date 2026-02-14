@@ -82,7 +82,9 @@ After installing, use the slash commands:
 ```
 /spec-first user authentication    # Create a feature spec
 /compound                          # Extract learnings after implementing
-/clone-app https://example.com     # Clone an app into roadmap
+/vision "CRM for real estate"      # Create a vision doc from description
+/roadmap create                    # Create a roadmap from the vision
+/clone-app https://example.com     # Clone an app into vision + roadmap
 /build-next                        # Build next feature from roadmap
 ```
 
@@ -106,6 +108,12 @@ After installing, use the slash commands:
 ### Roadmap: Full App Build
 
 ```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  /vision    │ ──▶ │  /roadmap   │ ──▶ │ /build-next │ ──▶ │   repeat    │
+│ (describe)  │     │  (plan)     │     │  (build)    │     │  until done │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+
+Or from an existing app:
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │  /clone-app │ ──▶ │ vision.md + │ ──▶ │ /build-next │ ──repeat──▶ App Built!
 │  (analyze)  │     │ roadmap.md  │     │  (loop)     │
@@ -136,6 +144,8 @@ After installing, use the slash commands:
 
 | Command | Purpose |
 |---------|---------|
+| `/vision` | Create or update vision.md from description, Jira, or Confluence |
+| `/roadmap` | Create, add features, reprioritize, or check status |
 | `/clone-app <url>` | Analyze app → create vision.md + roadmap.md |
 | `/build-next` | Build next pending feature from roadmap |
 | `/roadmap-triage` | Scan Slack/Jira → add to roadmap |
@@ -164,7 +174,7 @@ After installing, use the slash commands:
 │   └── commands/           # Claude Code command definitions
 │
 ├── .specs/
-│   ├── vision.md           # App vision (created by /clone-app)
+│   ├── vision.md           # App vision (created by /vision or /clone-app)
 │   ├── roadmap.md          # Feature roadmap (single source of truth)
 │   ├── features/           # Feature specs (Gherkin + ASCII mockups)
 │   │   └── {domain}/
@@ -199,16 +209,24 @@ The roadmap is the **single source of truth** for what to build.
 
 ### vision.md
 
-High-level app description created by `/clone-app`:
-- What the app does
-- Target users
-- Key screens
-- Tech stack
-- Design principles
+High-level app description. Created by:
+- `/vision "description"` — from a text description
+- `/vision --from-jira PROJECT_KEY` — seeded from Jira epics
+- `/vision --from-confluence PAGE_ID` — seeded from a Confluence page
+- `/clone-app <url>` — from analyzing a live app
+- `/vision --update` — refresh based on what's been built and learned
+
+Contents: app overview, target users, key screens, tech stack, design principles.
 
 ### roadmap.md
 
-Ordered list of features with dependencies:
+Ordered list of features with dependencies. Managed by:
+- `/roadmap create` — build from vision.md
+- `/roadmap add "feature"` — add features to existing roadmap
+- `/roadmap reprioritize` — restructure phases and reorder
+- `/roadmap status` — read-only progress report
+- `/clone-app <url>` — auto-generated from app analysis
+- `/roadmap-triage` — add items from Slack/Jira
 
 ```markdown
 ## Phase 1: Foundation
@@ -235,10 +253,10 @@ Ordered list of features with dependencies:
 │                              ▲                                  │
 │          ┌───────────────────┼───────────────────┐              │
 │          │                   │                   │              │
-│    ┌─────┴─────┐       ┌─────┴─────┐       ┌─────┴─────┐        │
-│    │ /clone-app │       │   Slack   │       │   Jira    │        │
-│    │  (bulk)    │       │ (triage)  │       │ (triage)  │        │
-│    └───────────┘       └───────────┘       └───────────┘        │
+│    ┌─────┴─────┐  ┌────┴────┐  ┌────┴────┐  ┌─────┴─────┐       │
+│    │  /vision   │  │/roadmap │  │  Slack  │  │   Jira    │       │
+│    │ /clone-app │  │  add    │  │(triage) │  │ (triage)  │       │
+│    └───────────┘  └────────┘  └────────┘  └───────────┘       │
 │                                                                 │
 │                              │                                  │
 │                              ▼                                  │
@@ -353,6 +371,31 @@ For overnight automation:
 
 ## Example: Building a Full App
 
+### From a description
+
+```bash
+# 1. Initialize project
+mkdir my-app && cd my-app
+git init
+git auto
+
+# 2. Define what you're building
+/vision "A task management app for small teams with projects, labels, and due dates"
+
+# 3. Create the build plan
+/roadmap create
+
+# 4. Build feature by feature
+/build-next    # Builds feature #1
+/build-next    # Builds feature #2
+# ...or let overnight automation handle it
+
+# 5. Check progress
+/roadmap status
+```
+
+### From an existing app
+
 ```bash
 # 1. Initialize project
 mkdir my-app && cd my-app
@@ -369,10 +412,22 @@ git auto
 # 3. Build feature by feature
 /build-next    # Builds feature #1
 /build-next    # Builds feature #2
-# ...or let overnight automation handle it
+```
 
-# 4. Check progress
-cat .specs/roadmap.md | grep -E "✅|🔄|⬜"
+### Adding features later
+
+```bash
+# Add a new feature or phase
+/roadmap add "email notifications and digest system"
+
+# Pull in requests from Slack/Jira
+/roadmap-triage
+
+# Restructure after priorities change
+/roadmap reprioritize
+
+# Update vision after building 20 features
+/vision --update
 ```
 
 ## Credits
