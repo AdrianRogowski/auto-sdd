@@ -192,6 +192,7 @@ Or from an existing app:
 │   └── mapping.md          # AUTO-GENERATED routing table
 │
 ├── scripts/
+│   ├── build-loop-local.sh        # Run /build-next in a loop (no remote)
 │   ├── generate-mapping.sh        # Regenerate mapping.md
 │   ├── nightly-review.sh          # Extract learnings (10:30 PM)
 │   ├── overnight-autonomous.sh    # Auto-implement features (11:00 PM)
@@ -353,6 +354,7 @@ Categories: `testing.md`, `performance.md`, `security.md`, `api.md`, `design.md`
 
 | Script | Purpose |
 |--------|---------|
+| `./scripts/build-loop-local.sh` | Run /build-next in a loop locally (no remote/push/PR) |
 | `./scripts/generate-mapping.sh` | Regenerate mapping.md from specs |
 | `./scripts/nightly-review.sh` | Extract learnings from today's commits |
 | `./scripts/overnight-autonomous.sh` | Full overnight automation |
