@@ -111,6 +111,29 @@ agent_cmd() {
     echo "$cmd"
 }
 
+detect_build_check() {
+    if [ -n "$BUILD_CHECK_CMD" ]; then
+        if [ "$BUILD_CHECK_CMD" = "skip" ]; then echo ""; else echo "$BUILD_CHECK_CMD"; fi
+        return
+    fi
+    if [ -f "tsconfig.build.json" ]; then echo "npx tsc --noEmit --project tsconfig.build.json"
+    elif [ -f "tsconfig.json" ]; then echo "npx tsc --noEmit"
+    elif [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then echo "python -m py_compile $(find . -name '*.py' -not -path '*/venv/*' -not -path '*/.venv/*' | head -1 2>/dev/null || echo 'main.py')"
+    elif [ -f "Cargo.toml" ]; then echo "cargo check"
+    elif [ -f "go.mod" ]; then echo "go build ./..."
+    elif [ -f "package.json" ] && grep -q '"build"' package.json 2>/dev/null; then echo "npm run build"
+    else echo ""; fi
+}
+
+BUILD_CMD=$(detect_build_check)
+
+check_build() {
+    if [ -z "$BUILD_CMD" ]; then return 0; fi
+    log "Running build check: $BUILD_CMD"
+    if eval "$BUILD_CMD" 2>&1; then success "Build check passed"; return 0
+    else error "Build check failed"; return 1; fi
+}
+
 detect_test_check() {
     if [ -n "$TEST_CHECK_CMD" ]; then
         if [ "$TEST_CHECK_CMD" = "skip" ]; then echo ""; else echo "$TEST_CHECK_CMD"; fi
@@ -222,7 +245,14 @@ DRIFT_UNRESOLVABLE: {what needs human attention}
             local fix_summary
             fix_summary=$(echo "$DRIFT_RESULT" | grep "DRIFT_FIXED" | tail -1 | cut -d: -f2- | xargs)
             success "Drift auto-fixed: $fix_summary"
-            return 0
+            # Verify the fix didn't break build or tests
+            if ! check_build; then
+                warn "Drift fix broke the build — retrying"
+            elif should_run_step "test" && [ -n "$TEST_CMD" ] && ! check_tests; then
+                warn "Drift fix broke tests — retrying"
+            else
+                return 0
+            fi
         fi
         if echo "$DRIFT_RESULT" | grep -q "DRIFT_UNRESOLVABLE"; then
             warn "Unresolvable drift: $(echo "$DRIFT_RESULT" | grep "DRIFT_UNRESOLVABLE" | tail -1 | cut -d: -f2- | xargs)"
@@ -435,6 +465,12 @@ The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported
         # Run code review (fresh agent, separate context)
         if should_run_step "code-review"; then
             run_code_review || warn "Code review had issues (non-blocking)"
+            # Re-validate after review changes
+            if ! check_build; then
+                warn "Code review broke the build!"
+            elif should_run_step "test" && [ -n "$TEST_CMD" ] && ! check_tests; then
+                warn "Code review broke tests!"
+            fi
         fi
         
         # Push and create PR

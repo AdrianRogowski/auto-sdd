@@ -344,11 +344,13 @@ DRIFT_UNRESOLVABLE: {what needs human attention and why}
             local fix_summary
             fix_summary=$(echo "$DRIFT_RESULT" | grep "DRIFT_FIXED" | tail -1 | cut -d: -f2- | xargs)
             success "Drift detected and auto-fixed: $fix_summary"
-            # Verify the fix didn't break the build
-            if check_build; then
-                return 0
-            else
+            # Verify the fix didn't break build or tests
+            if ! check_build; then
                 warn "Drift fix broke the build — retrying"
+            elif should_run_step "test" && [ -n "$TEST_CMD" ] && ! check_tests; then
+                warn "Drift fix broke tests — retrying"
+            else
+                return 0
             fi
         fi
 
