@@ -154,7 +154,7 @@ Every feature build goes through a multi-stage pipeline. Each agent-based step r
 | Drift check | Agent (fresh context) | `DRIFT_CHECK=true` | Yes (retry) | build + tests after fix |
 | Code review | Agent (fresh context) | `POST_BUILD_STEPS` | No (warn only) | build + tests after fix |
 
-Build and test re-runs after agent steps are shell commands — **zero AI tokens**.
+**Agents are test-aware**: Every agent receives the test command and is told to run tests and iterate until they pass. The retry agent also receives the actual failure output (last 50/80 lines of build/test errors) so it knows exactly what to fix. After each agent step, the shell re-runs build + tests as a safety net — **zero additional AI tokens** for that verification.
 
 **Model selection**: Each agent step can use a different model via `BUILD_MODEL`, `DRIFT_MODEL`, `REVIEW_MODEL`, etc.
 
