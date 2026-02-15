@@ -227,19 +227,28 @@ clean_working_tree() {
     fi
 }
 
+LAST_BUILD_OUTPUT=""
+LAST_TEST_OUTPUT=""
+
 check_build() {
     if [ -z "$BUILD_CMD" ]; then
         log "No build check configured (set BUILD_CHECK_CMD to enable)"
         return 0
     fi
     log "Running build check: $BUILD_CMD"
-    if eval "$BUILD_CMD" 2>&1; then
+    local tmpfile
+    tmpfile=$(mktemp)
+    eval "$BUILD_CMD" 2>&1 | tee "$tmpfile"
+    local exit_code=${PIPESTATUS[0]}
+    if [ $exit_code -eq 0 ]; then
         success "Build check passed"
-        return 0
+        LAST_BUILD_OUTPUT=""
     else
+        LAST_BUILD_OUTPUT=$(tail -50 "$tmpfile")
         fail "Build check failed"
-        return 1
     fi
+    rm -f "$tmpfile"
+    return $exit_code
 }
 
 check_tests() {
@@ -248,13 +257,19 @@ check_tests() {
         return 0
     fi
     log "Running test suite: $TEST_CMD"
-    if eval "$TEST_CMD" 2>&1; then
+    local tmpfile
+    tmpfile=$(mktemp)
+    eval "$TEST_CMD" 2>&1 | tee "$tmpfile"
+    local exit_code=${PIPESTATUS[0]}
+    if [ $exit_code -eq 0 ]; then
         success "Tests passed"
-        return 0
+        LAST_TEST_OUTPUT=""
     else
+        LAST_TEST_OUTPUT=$(tail -80 "$tmpfile")
         fail "Tests failed"
-        return 1
     fi
+    rm -f "$tmpfile"
+    return $exit_code
 }
 
 should_run_step() {
@@ -310,11 +325,23 @@ check_drift() {
 
         DRIFT_OUTPUT=$(mktemp)
 
+        local test_context=""
+        if [ -n "$TEST_CMD" ]; then
+            test_context="
+Test command: $TEST_CMD"
+        fi
+        if [ -n "$LAST_TEST_OUTPUT" ]; then
+            test_context="$test_context
+
+PREVIOUS TEST FAILURE OUTPUT (last 80 lines):
+$LAST_TEST_OUTPUT"
+        fi
+
         local drift_prompt="
 Run /catch-drift for this specific feature. This is an automated check — do NOT ask for user input. Auto-fix all drift by updating specs to match code (prefer documenting reality over reverting code).
 
 Spec file: $spec_file
-Source files: $source_files
+Source files: $source_files$test_context
 
 Instructions:
 1. Read the spec file and all its Gherkin scenarios
@@ -322,11 +349,13 @@ Instructions:
 3. Compare: does the code implement what the spec describes?
 4. Check: are there behaviors in code not covered by the spec?
 5. Check: are there scenarios in the spec not implemented in code?
-6. If drift found: update the spec to match the code (document reality)
-7. If tests need updating, update them too
-8. Commit any fixes with message: 'fix: reconcile spec drift for {feature}'
+6. If drift found: update specs, code, or tests as needed (prefer updating specs to match code)
+7. Run the test suite (\`$TEST_CMD\`) and fix any failures — iterate until tests pass
+8. Commit all fixes with message: 'fix: reconcile spec drift for {feature}'
 
-IMPORTANT: Output EXACTLY ONE of these signals at the end:
+IMPORTANT: Your goal is spec+code alignment AND a passing test suite. Keep iterating until both are achieved.
+
+Output EXACTLY ONE of these signals at the end:
 NO_DRIFT
 DRIFT_FIXED: {brief summary of what was reconciled}
 DRIFT_UNRESOLVABLE: {what needs human attention and why}
@@ -526,19 +555,37 @@ The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported
 They are used by the automated drift-check that runs after your build.
 '
 
-RETRY_PROMPT_TEMPLATE='
-The previous build attempt FAILED. There are uncommitted changes or build errors from the last attempt.
+build_retry_prompt() {
+    local prompt='The previous build attempt FAILED. There are uncommitted changes or build errors from the last attempt.
 
 Your job:
 1. Run "git status" to understand the current state
 2. Look at .specs/roadmap.md to find the feature marked 🔄 in progress
-3. Fix whatever is broken — type errors, missing imports, incomplete implementation
+3. Fix whatever is broken — type errors, missing imports, incomplete implementation, failing tests
 4. Make sure the feature works end-to-end with REAL data (no mocks, no fake endpoints)
-5. Commit all changes with a descriptive message
-6. Update roadmap to mark the feature ✅ completed
+5. Run the test suite to verify everything passes: '"$TEST_CMD"'
+6. Commit all changes with a descriptive message
+7. Update roadmap to mark the feature ✅ completed
 
 CRITICAL: Do NOT use mock data, fake JSON, or placeholder content. All features must use real DB queries and real API calls.
+'
 
+    # Append failure context if available
+    if [ -n "$LAST_BUILD_OUTPUT" ]; then
+        prompt="$prompt
+BUILD CHECK FAILURE OUTPUT (last 50 lines):
+$LAST_BUILD_OUTPUT
+"
+    fi
+
+    if [ -n "$LAST_TEST_OUTPUT" ]; then
+        prompt="$prompt
+TEST SUITE FAILURE OUTPUT (last 80 lines):
+$LAST_TEST_OUTPUT
+"
+    fi
+
+    prompt="$prompt
 After completion, output EXACTLY these signals (each on its own line):
 FEATURE_BUILT: {feature name}
 SPEC_FILE: {path to the .feature.md file}
@@ -546,7 +593,9 @@ SOURCE_FILES: {comma-separated paths to source files created/modified}
 
 Or if build fails:
 BUILD_FAILED: {reason}
-'
+"
+    echo "$prompt"
+}
 
 # ── Build loop function ──────────────────────────────────────────────────
 #
@@ -607,7 +656,7 @@ run_build_loop() {
             if [ "$attempt" -eq 0 ]; then
                 $(agent_cmd "$BUILD_MODEL") "$BUILD_PROMPT" 2>&1 | tee "$BUILD_OUTPUT" || true
             else
-                $(agent_cmd "$RETRY_MODEL") "$RETRY_PROMPT_TEMPLATE" 2>&1 | tee "$BUILD_OUTPUT" || true
+                $(agent_cmd "$RETRY_MODEL") "$(build_retry_prompt)" 2>&1 | tee "$BUILD_OUTPUT" || true
             fi
 
             BUILD_RESULT=$(cat "$BUILD_OUTPUT")

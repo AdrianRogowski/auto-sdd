@@ -130,9 +130,16 @@ BUILD_CMD=$(detect_build_check)
 check_build() {
     if [ -z "$BUILD_CMD" ]; then return 0; fi
     log "Running build check: $BUILD_CMD"
-    if eval "$BUILD_CMD" 2>&1; then success "Build check passed"; return 0
-    else error "Build check failed"; return 1; fi
+    local tmpfile; tmpfile=$(mktemp)
+    eval "$BUILD_CMD" 2>&1 | tee "$tmpfile"
+    local exit_code=${PIPESTATUS[0]}
+    if [ $exit_code -eq 0 ]; then success "Build check passed"; LAST_BUILD_OUTPUT=""
+    else LAST_BUILD_OUTPUT=$(tail -50 "$tmpfile"); error "Build check failed"; fi
+    rm -f "$tmpfile"; return $exit_code
 }
+
+LAST_BUILD_OUTPUT=""
+LAST_TEST_OUTPUT=""
 
 detect_test_check() {
     if [ -n "$TEST_CHECK_CMD" ]; then
@@ -154,8 +161,12 @@ TEST_CMD=$(detect_test_check)
 check_tests() {
     if [ -z "$TEST_CMD" ]; then return 0; fi
     log "Running test suite: $TEST_CMD"
-    if eval "$TEST_CMD" 2>&1; then success "Tests passed"; return 0
-    else error "Tests failed"; return 1; fi
+    local tmpfile; tmpfile=$(mktemp)
+    eval "$TEST_CMD" 2>&1 | tee "$tmpfile"
+    local exit_code=${PIPESTATUS[0]}
+    if [ $exit_code -eq 0 ]; then success "Tests passed"; LAST_TEST_OUTPUT=""
+    else LAST_TEST_OUTPUT=$(tail -80 "$tmpfile"); error "Tests failed"; fi
+    rm -f "$tmpfile"; return $exit_code
 }
 
 should_run_step() {
@@ -216,18 +227,33 @@ check_drift() {
     local drift_attempt=0
     while [ "$drift_attempt" -le "$MAX_DRIFT_RETRIES" ]; do
         DRIFT_OUTPUT=$(mktemp)
+        local test_context=""
+        if [ -n "$TEST_CMD" ]; then
+            test_context="
+Test command: $TEST_CMD"
+        fi
+        if [ -n "$LAST_TEST_OUTPUT" ]; then
+            test_context="$test_context
+
+PREVIOUS TEST FAILURE OUTPUT (last 80 lines):
+$LAST_TEST_OUTPUT"
+        fi
+
         $(agent_cmd "$DRIFT_MODEL") "
 Run /catch-drift for this specific feature. Auto-fix all drift by updating specs to match code.
 
 Spec file: $spec_file
-Source files: $source_files
+Source files: $source_files$test_context
 
 Instructions:
 1. Read the spec file and all its Gherkin scenarios
 2. Read each source file
 3. Compare: does the code implement what the spec describes?
-4. If drift found: update the spec to match the code
-5. Commit any fixes with message: 'fix: reconcile spec drift for {feature}'
+4. If drift found: update specs, code, or tests as needed (prefer updating specs to match code)
+5. Run the test suite (\`$TEST_CMD\`) and fix any failures — iterate until tests pass
+6. Commit all fixes with message: 'fix: reconcile spec drift for {feature}'
+
+IMPORTANT: Your goal is spec+code alignment AND a passing test suite. Keep iterating until both are achieved.
 
 Output EXACTLY ONE of:
 NO_DRIFT
