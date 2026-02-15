@@ -406,8 +406,15 @@ run_code_review() {
     local REVIEW_OUTPUT
     REVIEW_OUTPUT=$(mktemp)
 
+    local test_context=""
+    if [ -n "$TEST_CMD" ]; then
+        test_context="
+Test command: $TEST_CMD"
+    fi
+
     $(agent_cmd "$REVIEW_MODEL") "
 Review and improve the code quality of the most recently built feature.
+$test_context
 
 Steps:
 1. Check 'git log --oneline -10' to see recent commits
@@ -421,8 +428,10 @@ Steps:
 4. Fix critical and high-severity issues ONLY
 5. Do NOT change feature behavior
 6. Do NOT refactor working code for style preferences
-7. Run the test suite to verify your changes don't break anything
+7. Run the test suite (\`$TEST_CMD\`) after your changes — iterate until tests pass
 8. Commit fixes if any: git add -A && git commit -m 'refactor: code quality improvements (auto-review)'
+
+IMPORTANT: Do not introduce test regressions. Run tests after every change and fix anything you break.
 
 After completion, output exactly one of:
 REVIEW_CLEAN

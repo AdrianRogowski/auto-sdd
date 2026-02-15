@@ -175,13 +175,26 @@ should_run_step() {
 
 run_code_review() {
     log "Running code-review agent (fresh context, model: ${REVIEW_MODEL:-${AGENT_MODEL:-default}})..."
+    local test_context=""
+    if [ -n "$TEST_CMD" ]; then
+        test_context="
+Test command: $TEST_CMD"
+    fi
+
     $(agent_cmd "$REVIEW_MODEL") "
 Review and improve code quality of the most recently built feature.
+$test_context
+
+Steps:
 1. Check 'git log --oneline -10' to see recent commits
 2. Review source files against senior engineering standards
 3. Fix critical issues ONLY (no 'any' types, proper error handling, etc.)
 4. Do NOT change behavior. Do NOT refactor for style.
-5. Commit fixes if any: git add -A && git commit -m 'refactor: code quality improvements (auto-review)'
+5. Run the test suite (\`$TEST_CMD\`) after your changes — iterate until tests pass
+6. Commit fixes if any: git add -A && git commit -m 'refactor: code quality improvements (auto-review)'
+
+IMPORTANT: Do not introduce test regressions. Run tests after every change and fix anything you break.
+
 Output: REVIEW_CLEAN or REVIEW_FIXED: {summary} or REVIEW_FAILED: {reason}
 " 2>&1 || true
     if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
