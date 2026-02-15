@@ -125,26 +125,33 @@ Or from an existing app:
 ```
 11:00 PM  /roadmap-triage (scan Slack/Jira → add to roadmap)
           /build-next × MAX_FEATURES (build from roadmap)
-            └─ Each feature: build → drift check (fresh agent) → commit
+            └─ Each feature: build → tests → drift check → [code review] → commit
           Create draft PRs
  7:00 AM  You review 3-4 draft PRs (specs verified against code)
 ```
 
-### Drift Enforcement
+### Build Validation Pipeline
 
-Every feature build is verified at two layers:
+Every feature build goes through a multi-stage pipeline. Each agent-based step runs in a **fresh context window** — you can assign different AI models to each step.
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   BUILD     │ ──▶ │ SELF-CHECK  │ ──▶ │ FRESH-AGENT │ ──▶ │   COMMIT    │
-│ (spec-first │     │  (Layer 1)  │     │ DRIFT CHECK │     │  (only if   │
-│  --full)    │     │ same agent  │     │  (Layer 2)  │     │ drift-free) │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+┌─────────────┐  ┌───────────┐  ┌───────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────────┐
+│   BUILD     │─▶│  BUILD    │─▶│   TEST    │─▶│ DRIFT CHECK │─▶│CODE REVIEW  │─▶│  COMMIT  │
+│ (spec-first │  │  CHECK    │  │  SUITE    │  │ (fresh agent│  │(fresh agent,│  │          │
+│  --full)    │  │ (compile) │  │ (npm test)│  │  Layer 2)   │  │ optional)   │  │          │
+└─────────────┘  └───────────┘  └───────────┘  └─────────────┘  └─────────────┘  └──────────┘
+      │               │               │
+      └── retry ◄─────┴── retry ◄─────┘   (failures trigger retries)
 ```
 
-- **Layer 1**: Build agent re-reads its own spec and compares to implementation (cheap, same context)
-- **Layer 2**: Separate agent reads spec + code cold, reports `NO_DRIFT` / `DRIFT_FIXED` / `DRIFT_UNRESOLVABLE`
-- Feature only passes if both layers are clean
+| Stage | Type | Controls | Blocking? |
+|-------|------|----------|-----------|
+| Build check | Shell (compile/type check) | `BUILD_CHECK_CMD` | Yes (retry) |
+| Test suite | Shell (test runner) | `TEST_CHECK_CMD` | Yes (retry) |
+| Drift check | Agent (fresh context) | `DRIFT_CHECK=true` | Yes (retry) |
+| Code review | Agent (fresh context) | `POST_BUILD_STEPS` | No (warn only) |
+
+**Model selection**: Each agent step can use a different model via `BUILD_MODEL`, `DRIFT_MODEL`, `REVIEW_MODEL`, etc.
 
 ## Slash Commands
 
@@ -311,6 +318,19 @@ JIRA_AUTO_LABEL="auto-ok"
 CREATE_JIRA_FOR_SLACK=true    # Create Jira tickets for Slack requests
 SYNC_JIRA_STATUS=true         # Keep Jira status in sync
 MAX_FEATURES=4                # Features per overnight run
+
+# Build validation
+BUILD_CHECK_CMD=""            # Auto-detected (tsc, cargo check, etc.)
+TEST_CHECK_CMD=""             # Auto-detected (npm test, pytest, etc.)
+POST_BUILD_STEPS="test"       # Comma-separated: test, code-review
+DRIFT_CHECK=true              # Spec↔code drift detection
+
+# Model selection (per-step, each gets a fresh context window)
+# Run `agent --list-models` to see options
+AGENT_MODEL=""                # Default for all steps (empty = CLI default)
+BUILD_MODEL=""                # Main build agent
+DRIFT_MODEL=""                # Catch-drift agent
+REVIEW_MODEL=""               # Code-review agent
 ```
 
 ## Feature Spec Format
@@ -377,6 +397,22 @@ Categories: `testing.md`, `performance.md`, `security.md`, `api.md`, `design.md`
 | `./scripts/overnight-autonomous.sh` | Full overnight automation |
 | `./scripts/setup-overnight.sh` | Install launchd scheduled jobs |
 | `./scripts/uninstall-overnight.sh` | Remove launchd jobs |
+
+### Build Loop Examples
+
+```bash
+# Default: build with test suite enforcement
+./scripts/build-loop-local.sh
+
+# Full validation: tests + code review
+POST_BUILD_STEPS="test,code-review" ./scripts/build-loop-local.sh
+
+# Use Opus for building, cheap model for validation
+BUILD_MODEL="opus-4.6-thinking" DRIFT_MODEL="gemini-3-flash" ./scripts/build-loop-local.sh
+
+# Independent branches (each feature isolated from main)
+BRANCH_STRATEGY=independent ./scripts/build-loop-local.sh
+```
 
 ## Requirements
 
