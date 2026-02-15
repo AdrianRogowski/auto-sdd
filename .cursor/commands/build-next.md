@@ -17,8 +17,13 @@ Pick the next pending feature from the roadmap and build it through the full TDD
 2. **Spec** - Create feature spec with `/spec-first --full`
 3. **Build** - Implement through TDD cycle (includes self-check drift)
 4. **Update** - Mark roadmap as complete, sync Jira
-5. **Drift Check** - Build loop runs a fresh agent to verify spec↔code alignment
-6. **PR** - Create PR (if in overnight mode)
+5. **Build Check** - Shell verifies compilation (auto-detected or `BUILD_CHECK_CMD`)
+6. **Test Suite** - Shell runs tests (auto-detected or `TEST_CHECK_CMD`) — failures retry the build
+7. **Drift Check** - Fresh agent verifies spec↔code alignment, runs tests, iterates until passing
+8. **Code Review** - Fresh agent reviews quality, runs tests, iterates until passing (optional)
+9. **PR** - Create PR (if in overnight mode)
+
+All agents receive the test command and are told to iterate until tests pass. The retry agent also receives the actual build/test failure output so it knows exactly what to fix.
 
 ---
 
@@ -368,12 +373,30 @@ Agent:
 8. Updates roadmap: #5 → ✅
 9. Syncs Jira: PROJ-105 → Done + comment
 10. Reports success with signals
-11. Build loop runs fresh-agent drift check (Layer 2)
-
-✅ Feature #5 built: Dashboard
-Roadmap progress: 5/18 (28%)
 
 FEATURE_BUILT: Dashboard
 SPEC_FILE: .specs/features/dashboard/dashboard.feature.md
 SOURCE_FILES: app/(protected)/dashboard/page.tsx, components/dashboard-stats.tsx
+
+--- Build loop takes over (shell + fresh agents) ---
+
+11. Build check: `npx tsc --noEmit` → ✅
+12. Test suite: `npm test` → ✅
+13. Drift check (fresh agent):
+    - Receives spec file + source files + test command
+    - Compares spec vs code, runs tests, iterates until aligned + passing
+    - → NO_DRIFT ✅
+14. Code review (fresh agent, if POST_BUILD_STEPS includes "code-review"):
+    - Reviews code quality, runs tests after fixes
+    - → REVIEW_CLEAN ✅
+15. Shell re-runs build + tests after agent steps (zero-token safety net)
+16. ✅ Feature #5 complete
+
+--- If step 12 had failed ---
+
+12. Test suite: `npm test` → ❌ (3 tests failing)
+    Shell captures last 80 lines of test output
+    → Retry agent launched with failure output in prompt
+    → Agent reads errors, fixes code, reruns tests
+    → Loop back to step 11
 ```
