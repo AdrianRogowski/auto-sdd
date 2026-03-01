@@ -6,7 +6,7 @@ A framework for AI-assisted development that combines:
 - **Roadmap-Driven Automation** - Build entire apps feature-by-feature
 - **Overnight Automation** - Wake up to draft PRs
 
-Works with both **Cursor** and **Claude Code**.
+Works with both **Cursor** and **Claude Code**. Build scripts (`build-loop-local.sh`, `overnight-autonomous.sh`) support either CLI — set `CLI_PROVIDER=cursor` or `CLI_PROVIDER=claude` in `.env.local`.
 
 ## Installation
 
@@ -317,6 +317,11 @@ The system integrates with Jira and Slack via MCPs:
 Configure in `.env.local`:
 
 ```bash
+# CLI provider for build scripts (cursor | claude)
+# - cursor: Cursor CLI (agent) — default
+# - claude: Claude Code CLI (model names differ per provider)
+CLI_PROVIDER=cursor
+
 # Slack
 SLACK_FEATURE_CHANNEL="#feature-requests"
 SLACK_REPORT_CHANNEL="#dev-updates"
@@ -343,8 +348,8 @@ POST_BUILD_STEPS="test"       # Comma-separated: test, code-review
 DRIFT_CHECK=true              # Spec↔code drift detection
 
 # Model selection (per-step, each gets a fresh context window)
-# Run `agent --list-models` to see options
-AGENT_MODEL=""                # Default for all steps (empty = CLI default)
+# Cursor: use composer-1.5, sonnet-4.5; Claude: use claude-sonnet-4-5, etc.
+AGENT_MODEL="composer-1.5"    # Default for all steps (empty = CLI default)
 BUILD_MODEL=""                # Main build agent
 DRIFT_MODEL=""                # Catch-drift agent
 REVIEW_MODEL=""               # Code-review agent
@@ -408,7 +413,7 @@ Categories: `testing.md`, `performance.md`, `security.md`, `api.md`, `design.md`
 
 | Script | Purpose |
 |--------|---------|
-| `./scripts/build-loop-local.sh` | Run /build-next in a loop locally (no remote/push/PR). Config: BASE_BRANCH, BRANCH_STRATEGY, MAX_FEATURES |
+| `./scripts/build-loop-local.sh` | Run /build-next in a loop locally (no remote/push/PR). Config: CLI_PROVIDER, BASE_BRANCH, BRANCH_STRATEGY, MAX_FEATURES |
 | `./scripts/generate-mapping.sh` | Regenerate mapping.md from specs |
 | `./scripts/nightly-review.sh` | Extract learnings from today's commits |
 | `./scripts/overnight-autonomous.sh` | Full overnight automation (sync, triage, build, PRs) |
@@ -418,8 +423,11 @@ Categories: `testing.md`, `performance.md`, `security.md`, `api.md`, `design.md`
 ### Build Loop Examples
 
 ```bash
-# Default: chained branches, build with test suite enforcement
+# Default: Cursor CLI, chained branches, build with test suite enforcement
 ./scripts/build-loop-local.sh
+
+# Use Claude Code CLI instead
+CLI_PROVIDER=claude ./scripts/build-loop-local.sh
 
 # Full validation: tests + code review
 POST_BUILD_STEPS="test,code-review" ./scripts/build-loop-local.sh
@@ -438,13 +446,13 @@ BASE_BRANCH=develop ./scripts/build-loop-local.sh
 
 ## Requirements
 
-- **Cursor** or **Claude Code**
+- **Cursor** or **Claude Code** (for slash commands)
 - **GitHub CLI** (`gh`) for PR creation
 - **yq** for YAML parsing (`brew install yq`)
 
-For overnight automation:
-- **Cursor CLI** (`agent` command)
-- macOS (for launchd scheduling)
+For build scripts (`build-loop-local.sh`, `overnight-autonomous.sh`):
+- **Cursor CLI** (`agent`) or **Claude Code CLI** (`claude`) — set `CLI_PROVIDER=cursor` or `CLI_PROVIDER=claude` in `.env.local`
+- macOS (for launchd scheduling of overnight runs)
 
 ## Example: Building a Full App
 

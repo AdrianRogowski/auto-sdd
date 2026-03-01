@@ -8,7 +8,7 @@
 #   MAX_FEATURES=5 ./scripts/build-loop-local.sh
 #   BRANCH_STRATEGY=both ./scripts/build-loop-local.sh
 #
-# CONFIG: set MAX_FEATURES, MAX_RETRIES, BUILD_CHECK_CMD, BRANCH_STRATEGY in .env.local
+# CONFIG: set CLI_PROVIDER, MAX_FEATURES, MAX_RETRIES, BUILD_CHECK_CMD, BRANCH_STRATEGY in .env.local
 # or pass in env. Command-line env vars override .env.local (e.g. MAX_FEATURES=3 ./script).
 #
 # BASE_BRANCH: Branch to create feature branches from (default: current)
@@ -68,10 +68,13 @@
 #     POST_BUILD_STEPS="test,code-review"      # Tests + quality review
 #     POST_BUILD_STEPS=""                       # Skip all post-build steps
 #
+# CLI_PROVIDER: cursor (default) or claude. Use cursor for Cursor CLI (agent),
+#   claude for Claude Code CLI. Model names differ per provider.
+#
 # MODEL SELECTION: which AI model to use for each agent invocation.
 #   Each step gets its own fresh context window — choose the model per step.
-#   Leave empty to use the Cursor CLI default.
-#   Run `agent --list-models` to see available models.
+#   Leave empty to use the CLI default. Run `agent --list-models` or check
+#   Claude docs for model names.
 #
 #   AGENT_MODEL       - Default model for ALL agent steps (fallback)
 #   BUILD_MODEL       - Model for main build agent (/build-next → /spec-first --full)
@@ -106,6 +109,7 @@ if [ -f "$PROJECT_DIR/.env.local" ]; then
     done < "$PROJECT_DIR/.env.local"
 fi
 
+CLI_PROVIDER="${CLI_PROVIDER:-cursor}"
 MAX_FEATURES="${MAX_FEATURES:-50}"
 MAX_RETRIES="${MAX_RETRIES:-3}"
 BRANCH_STRATEGY="${BRANCH_STRATEGY:-chained}"
@@ -166,9 +170,10 @@ else
     fi
 fi
 
-if ! command -v agent &> /dev/null; then
-    echo "Cursor CLI (agent) not found. Install from: https://cursor.com/cli"
-    exit 1
+if [ "$CLI_PROVIDER" = "claude" ]; then
+    command -v claude &>/dev/null || { fail "Claude Code CLI not found. Install from: https://code.claude.com"; exit 1; }
+else
+    command -v agent &>/dev/null || { fail "Cursor CLI (agent) not found. Install from: https://cursor.com/cli"; exit 1; }
 fi
 
 # ── Auto-detect build check command ──────────────────────────────────────
@@ -226,16 +231,26 @@ detect_test_check() {
 
 TEST_CMD=$(detect_test_check)
 
-# ── Agent command builder (model selection) ───────────────────────────────
+# ── Agent runner (supports Cursor CLI and Claude Code) ─────────────────────
 
-agent_cmd() {
+run_agent() {
     local step_model="$1"
+    local prompt="$2"
     local model="${step_model:-$AGENT_MODEL}"
-    local cmd="agent -p --force --output-format text"
-    if [ -n "$model" ]; then
-        cmd="$cmd --model $model"
+
+    if [ "$CLI_PROVIDER" = "claude" ]; then
+        if [ -n "$model" ]; then
+            claude -p "$prompt" --output-format text --allowedTools Read,Edit,Bash,Grep,Glob --model "$model"
+        else
+            claude -p "$prompt" --output-format text --allowedTools Read,Edit,Bash,Grep,Glob
+        fi
+    else
+        if [ -n "$model" ]; then
+            agent -p --force --output-format text --model "$model" "$prompt"
+        else
+            agent -p --force --output-format text "$prompt"
+        fi
     fi
-    echo "$cmd"
 }
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -387,7 +402,7 @@ NO_DRIFT
 DRIFT_FIXED: {brief summary of what was reconciled}
 DRIFT_UNRESOLVABLE: {what needs human attention and why}
 "
-        $(agent_cmd "$DRIFT_MODEL") "$drift_prompt" 2>&1 | tee "$DRIFT_OUTPUT" || true
+        run_agent "$DRIFT_MODEL" "$drift_prompt" 2>&1 | tee "$DRIFT_OUTPUT" || true
         DRIFT_RESULT=$(cat "$DRIFT_OUTPUT")
         rm -f "$DRIFT_OUTPUT"
 
@@ -439,7 +454,7 @@ run_code_review() {
 Test command: $TEST_CMD"
     fi
 
-    $(agent_cmd "$REVIEW_MODEL") "
+    local review_prompt="
 Review and improve the code quality of the most recently built feature.
 $test_context
 
@@ -464,7 +479,8 @@ After completion, output exactly one of:
 REVIEW_CLEAN
 REVIEW_FIXED: {summary}
 REVIEW_FAILED: {reason}
-" 2>&1 | tee "$REVIEW_OUTPUT" || true
+"
+    run_agent "$REVIEW_MODEL" "$review_prompt" 2>&1 | tee "$REVIEW_OUTPUT" || true
 
     local REVIEW_RESULT
     REVIEW_RESULT=$(cat "$REVIEW_OUTPUT")
@@ -690,9 +706,9 @@ run_build_loop() {
             BUILD_OUTPUT=$(mktemp)
 
             if [ "$attempt" -eq 0 ]; then
-                $(agent_cmd "$BUILD_MODEL") "$BUILD_PROMPT" 2>&1 | tee "$BUILD_OUTPUT" || true
+                run_agent "$BUILD_MODEL" "$BUILD_PROMPT" 2>&1 | tee "$BUILD_OUTPUT" || true
             else
-                $(agent_cmd "$RETRY_MODEL") "$(build_retry_prompt)" 2>&1 | tee "$BUILD_OUTPUT" || true
+                run_agent "$RETRY_MODEL" "$(build_retry_prompt)" 2>&1 | tee "$BUILD_OUTPUT" || true
             fi
 
             BUILD_RESULT=$(cat "$BUILD_OUTPUT")
@@ -832,6 +848,7 @@ cleanup_all_worktrees() {
 
 echo ""
 echo "Build loop (local only, no remote/push/PR)"
+echo "CLI provider: $CLI_PROVIDER"
 echo "Base branch: $MAIN_BRANCH"
 echo "Branch strategy: $BRANCH_STRATEGY"
 echo "Max features: $MAX_FEATURES | Max retries per feature: $MAX_RETRIES"
@@ -958,7 +975,7 @@ BUILD_FAILED: {reason}
 "
 
             BUILD_OUTPUT=$(mktemp)
-            $(agent_cmd "$BUILD_MODEL") "$INDEP_PROMPT" 2>&1 | tee "$BUILD_OUTPUT" || true
+            run_agent "$BUILD_MODEL" "$INDEP_PROMPT" 2>&1 | tee "$BUILD_OUTPUT" || true
             BUILD_RESULT=$(cat "$BUILD_OUTPUT")
             rm -f "$BUILD_OUTPUT"
 

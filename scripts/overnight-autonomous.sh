@@ -59,6 +59,7 @@ if [ -f "$PROJECT_DIR/.env.local" ]; then
 fi
 
 # Defaults
+CLI_PROVIDER="${CLI_PROVIDER:-cursor}"
 MAX_FEATURES="${MAX_FEATURES:-4}"
 BRANCH_STRATEGY="${BRANCH_STRATEGY:-chained}"
 # BASE_BRANCH: develop, main, or "current" (use git branch --show-current)
@@ -78,6 +79,7 @@ fi
 
 section "OVERNIGHT AUTONOMOUS RUN"
 log "Project: $PROJECT_DIR"
+log "CLI provider: $CLI_PROVIDER"
 log "Base branch: $BASE_BRANCH"
 log "Branch strategy: $BRANCH_STRATEGY"
 log "Max features: $MAX_FEATURES"
@@ -87,9 +89,10 @@ log "Jira project: ${JIRA_PROJECT_KEY:-not configured}"
 cd "$PROJECT_DIR"
 
 # Check prerequisites
-if ! command -v agent &> /dev/null; then
-    error "Cursor CLI (agent) not found. Install from: https://cursor.com/cli"
-    exit 1
+if [ "$CLI_PROVIDER" = "claude" ]; then
+    command -v claude &>/dev/null || { error "Claude Code CLI not found. Install from: https://code.claude.com"; exit 1; }
+else
+    command -v agent &>/dev/null || { error "Cursor CLI (agent) not found. Install from: https://cursor.com/cli"; exit 1; }
 fi
 
 if ! command -v gh &> /dev/null; then
@@ -107,14 +110,24 @@ REVIEW_MODEL="${REVIEW_MODEL:-}"
 TRIAGE_MODEL="${TRIAGE_MODEL:-}"
 POST_BUILD_STEPS="${POST_BUILD_STEPS:-test}"
 
-agent_cmd() {
+run_agent() {
     local step_model="$1"
+    local prompt="$2"
     local model="${step_model:-$AGENT_MODEL}"
-    local cmd="agent -p --force --output-format text"
-    if [ -n "$model" ]; then
-        cmd="$cmd --model $model"
+
+    if [ "$CLI_PROVIDER" = "claude" ]; then
+        if [ -n "$model" ]; then
+            claude -p "$prompt" --output-format text --allowedTools Read,Edit,Bash,Grep,Glob --model "$model"
+        else
+            claude -p "$prompt" --output-format text --allowedTools Read,Edit,Bash,Grep,Glob
+        fi
+    else
+        if [ -n "$model" ]; then
+            agent -p --force --output-format text --model "$model" "$prompt"
+        else
+            agent -p --force --output-format text "$prompt"
+        fi
     fi
-    echo "$cmd"
 }
 
 detect_build_check() {
@@ -187,7 +200,7 @@ run_code_review() {
 Test command: $TEST_CMD"
     fi
 
-    $(agent_cmd "$REVIEW_MODEL") "
+    local review_prompt="
 Review and improve code quality of the most recently built feature.
 $test_context
 
@@ -202,7 +215,8 @@ Steps:
 IMPORTANT: Do not introduce test regressions. Run tests after every change and fix anything you break.
 
 Output: REVIEW_CLEAN or REVIEW_FIXED: {summary} or REVIEW_FAILED: {reason}
-" 2>&1 || true
+"
+    run_agent "$REVIEW_MODEL" "$review_prompt" 2>&1 || true
     if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
         git add -A && git commit -m "refactor: code quality improvements (auto-review)" 2>/dev/null || true
     fi
@@ -258,7 +272,7 @@ PREVIOUS TEST FAILURE OUTPUT (last 80 lines):
 $LAST_TEST_OUTPUT"
         fi
 
-        $(agent_cmd "$DRIFT_MODEL") "
+        local drift_prompt="
 Run /catch-drift for this specific feature. Auto-fix all drift by updating specs to match code.
 
 Spec file: $spec_file
@@ -278,7 +292,8 @@ Output EXACTLY ONE of:
 NO_DRIFT
 DRIFT_FIXED: {brief summary}
 DRIFT_UNRESOLVABLE: {what needs human attention}
-" 2>&1 | tee "$DRIFT_OUTPUT" || true
+"
+        run_agent "$DRIFT_MODEL" "$drift_prompt" 2>&1 | tee "$DRIFT_OUTPUT" || true
         DRIFT_RESULT=$(cat "$DRIFT_OUTPUT")
         rm -f "$DRIFT_OUTPUT"
 
@@ -384,7 +399,7 @@ STEP_START=$(date +%s)
 
 log "Running /roadmap-triage to scan Slack/Jira..."
 
-$(agent_cmd "$TRIAGE_MODEL") "
+triage_prompt="
 Run the /roadmap-triage command to:
 1. Scan Slack channel $SLACK_FEATURE_CHANNEL for feature requests
 2. Scan Jira project $JIRA_PROJECT_KEY for tickets with label 'auto-ok'
@@ -395,6 +410,7 @@ Run the /roadmap-triage command to:
 
 If no new requests found, that's fine - continue.
 "
+run_agent "$TRIAGE_MODEL" "$triage_prompt"
 
 STEP_DURATION=$(( $(date +%s) - STEP_START ))
 success "Triage complete ($(format_duration $STEP_DURATION))"
@@ -445,7 +461,7 @@ for i in $(seq 1 "$MAX_FEATURES"); do
     # Run /build-next
     BUILD_OUTPUT=$(mktemp)
     
-    $(agent_cmd "$BUILD_MODEL") "
+    build_prompt="
 Run the /build-next command to:
 1. Read .specs/roadmap.md and find the next pending feature
 2. Check that all dependencies are completed
@@ -466,7 +482,8 @@ Or: NO_FEATURES_READY
 Or: BUILD_FAILED: {reason}
 
 The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported.
-" > "$BUILD_OUTPUT" 2>&1 || true
+"
+    run_agent "$BUILD_MODEL" "$build_prompt" > "$BUILD_OUTPUT" 2>&1 || true
     
     BUILD_RESULT=$(cat "$BUILD_OUTPUT")
     rm "$BUILD_OUTPUT"
@@ -653,7 +670,7 @@ echo "Total time: $(format_duration $TOTAL_ELAPSED)"
 
 # Notify via Slack if configured
 if [ "$BUILT" -gt 0 ] && [ -n "$SLACK_REPORT_CHANNEL" ]; then
-    $(agent_cmd "$TRIAGE_MODEL") "
+    slack_prompt="
 Post a message to Slack channel $SLACK_REPORT_CHANNEL:
 
 🌙 **Overnight Run Complete**
@@ -665,6 +682,7 @@ Roadmap: $COMPLETED completed, $PENDING pending
 
 Check GitHub for draft PRs to review.
 "
+    run_agent "$TRIAGE_MODEL" "$slack_prompt"
 fi
 
 success "Overnight run complete!"
