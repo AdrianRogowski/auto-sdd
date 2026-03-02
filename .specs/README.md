@@ -154,7 +154,7 @@ Example: `CMP-001`, `API-015`, `UT-003`
 ### New Features (Manual)
 
 ```
-1. /spec-first {feature}      → Creates spec with YAML frontmatter
+1. /spec-first {feature}      → Creates or updates spec with YAML frontmatter
 2. Review and approve
 3. Tests written (failing)    → Update frontmatter: status: tested
 4. Implement until tests pass → Update frontmatter: status: implemented
@@ -221,7 +221,7 @@ The mapping provides a routing table for the agent to find specs, tests, and com
 
 | Command | Purpose |
 |---------|---------|
-| `/spec-first` | Create feature spec + mockup |
+| `/spec-first` | Create or update feature spec + mockup |
 | `/spec-init` | Bootstrap existing codebase |
 | `/compound` | Extract learnings from session |
 | `/design-tokens` | Manage design tokens |

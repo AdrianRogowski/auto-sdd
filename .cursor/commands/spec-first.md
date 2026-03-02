@@ -1,6 +1,6 @@
 # Spec-First Mode (TDD + Design Flow)
 
-Create the feature specification with Gherkin scenarios and ASCII mockups without implementing anything. This is step 1 of the TDD flow.
+Create or update the feature specification with Gherkin scenarios and ASCII mockups. This is step 1 of the TDD flow.
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -11,7 +11,7 @@ Create the feature specification with Gherkin scenarios and ASCII mockups withou
       ▲                   │
       │                   │
       └───────────────────┘
-      (create if not exists)
+      (create if not exists, update if exists)
 ```
 
 ## Mode Detection
@@ -29,14 +29,14 @@ Check if the user included `--full` or `--auto` flag:
 
 If `--full` or `--auto` flag is present, execute the ENTIRE TDD cycle without stopping:
 
-1. Create spec with Gherkin + mockup
-2. **Do NOT pause** - immediately write failing tests
+1. Create OR update spec (see Step 0)
+2. **Do NOT pause** - immediately write failing tests (or update tests if spec was updated)
 3. **Do NOT pause** - immediately implement until tests pass
 4. Update all frontmatter (status: implemented)
 5. Run `/compound` to extract learnings
 6. Commit with descriptive message
 
-**Skip all "Ready to...?" prompts in full mode.**
+**Skip all "Ready to...?" prompts in full mode. Both create and update paths continue through the full loop.**
 
 ### Normal Mode Behavior (default)
 
@@ -46,6 +46,24 @@ Stop for user approval at each step (existing behavior).
 
 ## Behavior
 
+### 0. Resolve Spec File (Create vs Update)
+
+**Before creating anything**, determine whether to create or update:
+
+1. Parse the feature description from arguments (strip `--full`, `--auto`).
+2. Search for an existing spec:
+   - List `.specs/features/**/*.feature.md`
+   - Derive candidate path from input: e.g. "user profile" → `users/user-profile.feature.md`, "Auth: Signup" → `auth/signup.feature.md`
+   - For each spec, check if frontmatter `feature:` matches (case-insensitive, normalize spaces/hyphens)
+   - If a file exists at the derived path, it's a match
+3. **If match found** → **UPDATE mode**:
+   - Read the existing spec
+   - Preserve: `status`, `tests`, `components`, `created`, `design_refs`
+   - Update: scenarios, mockup, description per user's request
+   - Set `updated: YYYY-MM-DD`
+   - **Full mode**: continue through tests → implement → compound → commit (same as create)
+4. **If no match** → **CREATE mode** (proceed to Step 1)
+
 ### 1. Check/Create Design System
 
 If this is the first feature (no `.specs/design-system/tokens.md` exists):
@@ -53,8 +71,9 @@ If this is the first feature (no `.specs/design-system/tokens.md` exists):
 - Auto-create `.cursor/rules/design-tokens.mdc` cursor rule
 - Inform user: "Created default design system. Customize tokens.md as needed."
 
-### 2. Create Feature Spec
+### 2. Create or Update Feature Spec
 
+**CREATE mode:**
 - Create `.specs/features/{domain}/{feature}.feature.md`
 - Write detailed **Gherkin scenarios** covering:
   - Happy path
@@ -62,9 +81,16 @@ If this is the first feature (no `.specs/design-system/tokens.md` exists):
   - Error states
   - Loading states (if applicable)
 
-### 3. Create ASCII Mockup
+**UPDATE mode:**
+- Update the existing spec file
+- Revise scenarios and mockup per user's request
+- Add new scenarios if user is expanding the feature
+- Preserve existing `status`, `tests`, `components` in frontmatter
+- Set `updated: YYYY-MM-DD`
 
-- Add `## UI Mockup` section with ASCII art showing:
+### 3. Create or Update ASCII Mockup
+
+- Add or update `## UI Mockup` section with ASCII art showing:
   - Component layout and structure
   - Key interactive elements
   - States (default, hover, active, disabled, loading, error)
@@ -216,13 +242,14 @@ Then [error handling behavior]
 
 ## Output Format
 
-After creating the spec, provide this summary:
+After creating or updating the spec, provide this summary:
 
 ```markdown
 ## Summary
 
 **Feature**: [Name]
 **Spec File**: `.specs/features/{domain}/{feature}.feature.md`
+**Mode**: [Created new / Updated existing]
 **Design System**: [Created new / Using existing]
 
 ### Scenarios Documented
@@ -263,9 +290,9 @@ After creating the spec, provide this summary:
 **Normal Mode**: When user says "go", "yes", "looks good", or approves
 **Full Mode**: Execute immediately without waiting for approval
 
-### Step 2: Write Failing Tests
-1. Write tests that cover ALL Gherkin scenarios
-2. Tests should **FAIL** initially (no implementation yet)
+### Step 2: Write Failing Tests (or Update Tests)
+1. Write tests that cover ALL Gherkin scenarios (create new or update existing)
+2. Tests should **FAIL** initially if no implementation yet (or fail if spec was updated and code doesn't match)
 3. Document tests in `.specs/test-suites/{path}.tests.md`
 4. Update spec frontmatter: `status: tested`, add test files to `tests: []`
 5. Regenerate mapping: run `./scripts/generate-mapping.sh`
@@ -406,26 +433,27 @@ These signals enable the automated drift-check that runs after your commit.
 
 ### I Will:
 
-1. **Check design system** - Create if not exists
-2. **Create spec file**: `.specs/features/users/profile-page.feature.md`
-3. **Write scenarios**:
+1. **Resolve spec** - Search for existing spec matching "user profile"; if found, UPDATE mode; if not, CREATE mode
+2. **Check design system** - Create if not exists
+3. **Create or update spec file**: `.specs/features/users/profile-page.feature.md`
+4. **Write scenarios**:
    - Display profile information
    - Edit profile (happy path)
    - Edit profile validation errors
    - Avatar upload
    - Cancel editing
-4. **Create ASCII mockups**:
+5. **Create ASCII mockups**:
    - View mode
    - Edit mode
    - Loading state
    - Error states
-5. **Create component stubs**:
+6. **Create component stubs**:
    - Avatar component
    - ProfileForm component
    - EditableField component
-6. **List design tokens** used
-7. **Identify questions** (image size limits? required fields?)
-8. **STOP** and wait for approval
+7. **List design tokens** used
+8. **Identify questions** (image size limits? required fields?)
+9. **STOP** and wait for approval (Normal mode) or continue to tests → implement → compound → commit (Full mode)
 
 ---
 

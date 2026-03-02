@@ -77,14 +77,15 @@
 #   Claude docs for model names.
 #
 #   AGENT_MODEL       - Default model for ALL agent steps (fallback)
-#   BUILD_MODEL       - Model for main build agent (/build-next → /spec-first --full)
+#   SPEC_MODEL        - Model for spec phase (/spec-first without --full)
+#   BUILD_MODEL       - Model for implement phase (tests, implement, compound, commit)
 #   RETRY_MODEL       - Model for retry attempts (fixing build/test failures)
 #   DRIFT_MODEL       - Model for catch-drift agent
 #   REVIEW_MODEL      - Model for code-review agent
 #
 #   Examples:
-#     AGENT_MODEL="sonnet-4.5"                    # Use Sonnet for everything
-#     BUILD_MODEL="opus-4.6-thinking"             # Opus for main build
+#     SPEC_MODEL="opus-4.6-thinking"              # Opus for spec (strong at planning)
+#     BUILD_MODEL="composer-1.5"                  # Cheaper model for implementation
 #     DRIFT_MODEL="gemini-3-flash"                # Cheap model for drift checks
 #     REVIEW_MODEL="sonnet-4.5-thinking"          # Thinking model for reviews
 
@@ -120,6 +121,7 @@ POST_BUILD_STEPS="${POST_BUILD_STEPS:-test}"
 # Model selection (per-step overrides with AGENT_MODEL fallback)
 # Cursor CLI default; run `agent --list-models` to see available models
 AGENT_MODEL="${AGENT_MODEL:-composer-1.5}"
+SPEC_MODEL="${SPEC_MODEL:-}"
 BUILD_MODEL="${BUILD_MODEL:-}"
 RETRY_MODEL="${RETRY_MODEL:-}"
 DRIFT_MODEL="${DRIFT_MODEL:-}"
@@ -572,18 +574,48 @@ cleanup_branch_sequential() {
 
 # ── Prompts ──────────────────────────────────────────────────────────────
 
-BUILD_PROMPT='
-Run the /build-next command to:
+# Phase 1: Spec only (no --full). Uses SPEC_MODEL.
+SPEC_PROMPT='
+Run the /build-next command to find the next feature, then create the spec ONLY:
+
 1. Read .specs/roadmap.md and find the next pending feature
 2. Check that all dependencies are completed
 3. If a feature is ready:
    - Update roadmap to mark it 🔄 in progress
-   - Run /spec-first {feature} --full to build it (includes /compound)
-   - Update roadmap to mark it ✅ completed
+   - Run /spec-first {feature} (WITHOUT --full) — create or update the spec only, do NOT implement
+   - Do NOT write tests, do NOT implement, do NOT commit yet
    - Regenerate mapping: run ./scripts/generate-mapping.sh
-   - Commit all changes with a descriptive message
 4. If no features are ready, output: NO_FEATURES_READY
-5. If build fails, output: BUILD_FAILED: {reason}
+5. If spec fails, output: SPEC_FAILED: {reason}
+
+After completion, output EXACTLY these signals (each on its own line):
+FEATURE_SPEC_READY: {feature name}
+SPEC_FILE: {path to the .feature.md file you created/updated}
+
+Or if no features are ready:
+NO_FEATURES_READY
+
+Or if spec fails:
+SPEC_FAILED: {reason}
+
+The SPEC_FILE line is REQUIRED when FEATURE_SPEC_READY is reported.
+'
+
+# Phase 2: Implement from spec. Uses BUILD_MODEL.
+# Called with: implement_prompt "$feature_name" "$spec_file"
+implement_prompt() {
+    local feature_name="$1"
+    local spec_file="$2"
+    echo "
+The spec for \"$feature_name\" exists at $spec_file. Implement it through the full TDD cycle:
+
+1. Read the spec file and all its Gherkin scenarios
+2. Write failing tests covering ALL scenarios
+3. Implement until all tests pass
+4. Run /compound to extract learnings
+5. Regenerate mapping: run ./scripts/generate-mapping.sh
+6. Update roadmap to mark the feature ✅ completed
+7. Commit all changes with a descriptive message
 
 CRITICAL IMPLEMENTATION RULES (from roadmap):
 - NO mock data, fake JSON, or placeholder content. All features use real DB queries and real API calls.
@@ -593,31 +625,30 @@ CRITICAL IMPLEMENTATION RULES (from roadmap):
 - Real validation, real error handling, real flows.
 
 After completion, output EXACTLY these signals (each on its own line):
-FEATURE_BUILT: {feature name}
-SPEC_FILE: {path to the .feature.md file you created/updated}
+FEATURE_BUILT: $feature_name
+SPEC_FILE: $spec_file
 SOURCE_FILES: {comma-separated paths to source files created/modified}
-
-Or if no features are ready:
-NO_FEATURES_READY
 
 Or if build fails:
 BUILD_FAILED: {reason}
 
 The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported.
 They are used by the automated drift-check that runs after your build.
-'
+"
+}
 
 build_retry_prompt() {
-    local prompt='The previous build attempt FAILED. There are uncommitted changes or build errors from the last attempt.
+    local prompt='The previous attempt FAILED (spec phase or implement phase). There are uncommitted changes or errors.
 
 Your job:
 1. Run "git status" to understand the current state
 2. Look at .specs/roadmap.md to find the feature marked 🔄 in progress
-3. Fix whatever is broken — type errors, missing imports, incomplete implementation, failing tests
-4. Make sure the feature works end-to-end with REAL data (no mocks, no fake endpoints)
-5. Run the test suite to verify everything passes: '"$TEST_CMD"'
-6. Commit all changes with a descriptive message
-7. Update roadmap to mark the feature ✅ completed
+3. If the spec is missing or incomplete: run /spec-first {feature} (without --full) to create/update it
+4. If the spec exists: fix the implementation — type errors, missing imports, incomplete code, failing tests
+5. Complete the full TDD cycle: tests, implement until pass, /compound, commit
+6. Make sure the feature works end-to-end with REAL data (no mocks, no fake endpoints)
+7. Run the test suite to verify everything passes: '"$TEST_CMD"'
+8. Update roadmap to mark the feature ✅ completed
 
 CRITICAL: Do NOT use mock data, fake JSON, or placeholder content. All features must use real DB queries and real API calls.
 '
@@ -706,13 +737,34 @@ run_build_loop() {
             BUILD_OUTPUT=$(mktemp)
 
             if [ "$attempt" -eq 0 ]; then
-                run_agent "$BUILD_MODEL" "$BUILD_PROMPT" 2>&1 | tee "$BUILD_OUTPUT" || true
+                # ── Phase 1: Spec only (SPEC_MODEL) ──
+                log "Phase 1: Spec (model: ${SPEC_MODEL:-${AGENT_MODEL:-default}})"
+                run_agent "$SPEC_MODEL" "$SPEC_PROMPT" 2>&1 | tee "$BUILD_OUTPUT" || true
+                SPEC_RESULT=$(cat "$BUILD_OUTPUT")
+
+                # Check for no features ready (exit loop)
+                if echo "$SPEC_RESULT" | grep -q "NO_FEATURES_READY"; then
+                    BUILD_RESULT="$SPEC_RESULT"
+                    rm -f "$BUILD_OUTPUT"
+                    # Fall through to NO_FEATURES_READY handling below
+                elif echo "$SPEC_RESULT" | grep -q "FEATURE_SPEC_READY"; then
+                    # ── Phase 2: Implement (BUILD_MODEL) ──
+                    FEATURE_FOR_IMPL=$(echo "$SPEC_RESULT" | grep "FEATURE_SPEC_READY" | tail -1 | cut -d: -f2- | xargs)
+                    SPEC_FILE_FOR_IMPL=$(echo "$SPEC_RESULT" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | xargs)
+                    log "Phase 2: Implement (model: ${BUILD_MODEL:-${AGENT_MODEL:-default}}) — $FEATURE_FOR_IMPL"
+                    run_agent "$BUILD_MODEL" "$(implement_prompt "$FEATURE_FOR_IMPL" "$SPEC_FILE_FOR_IMPL")" 2>&1 | tee "$BUILD_OUTPUT" || true
+                    BUILD_RESULT=$(cat "$BUILD_OUTPUT")
+                    rm -f "$BUILD_OUTPUT"
+                else
+                    # SPEC_FAILED or unclear — use as BUILD_RESULT for retry logic
+                    BUILD_RESULT="$SPEC_RESULT"
+                    rm -f "$BUILD_OUTPUT"
+                fi
             else
                 run_agent "$RETRY_MODEL" "$(build_retry_prompt)" 2>&1 | tee "$BUILD_OUTPUT" || true
+                BUILD_RESULT=$(cat "$BUILD_OUTPUT")
+                rm -f "$BUILD_OUTPUT"
             fi
-
-            BUILD_RESULT=$(cat "$BUILD_OUTPUT")
-            rm -f "$BUILD_OUTPUT"
 
             # ── Check for "no features ready" ──
             if echo "$BUILD_RESULT" | grep -q "NO_FEATURES_READY"; then
@@ -784,10 +836,14 @@ run_build_loop() {
             fi
 
             # ── If we get here, the attempt failed ──
-            if echo "$BUILD_RESULT" | grep -q "BUILD_FAILED"; then
+            if echo "$BUILD_RESULT" | grep -q "SPEC_FAILED"; then
+                local reason
+                reason=$(echo "$BUILD_RESULT" | grep "SPEC_FAILED" | tail -1 | cut -d: -f2-)
+                warn "Spec phase failed:$reason"
+            elif echo "$BUILD_RESULT" | grep -q "BUILD_FAILED"; then
                 local reason
                 reason=$(echo "$BUILD_RESULT" | grep "BUILD_FAILED" | tail -1 | cut -d: -f2-)
-                warn "Build failed:$reason"
+                warn "Implement phase failed:$reason"
             else
                 warn "Build did not produce a clear success signal"
             fi
@@ -868,8 +924,8 @@ else
     echo "Drift check: disabled (set DRIFT_CHECK=true to enable)"
 fi
 echo "Post-build steps: ${POST_BUILD_STEPS:-none}"
-if [ -n "$AGENT_MODEL" ] || [ -n "$BUILD_MODEL" ] || [ -n "$DRIFT_MODEL" ] || [ -n "$REVIEW_MODEL" ]; then
-    echo "Models: default=${AGENT_MODEL:-CLI default} build=${BUILD_MODEL:-↑} drift=${DRIFT_MODEL:-↑} review=${REVIEW_MODEL:-↑}"
+if [ -n "$AGENT_MODEL" ] || [ -n "$SPEC_MODEL" ] || [ -n "$BUILD_MODEL" ] || [ -n "$DRIFT_MODEL" ] || [ -n "$REVIEW_MODEL" ]; then
+    echo "Models: default=${AGENT_MODEL:-CLI default} spec=${SPEC_MODEL:-↑} build=${BUILD_MODEL:-↑} drift=${DRIFT_MODEL:-↑} review=${REVIEW_MODEL:-↑}"
 fi
 echo ""
 
@@ -952,30 +1008,33 @@ if [ "$BRANCH_STRATEGY" = "both" ]; then
 
             cd "$worktree_path"
 
-            INDEP_PROMPT="
-Build the feature: $fn
+            # Independent pass: spec phase then implement phase
+            INDEP_SPEC_PROMPT="
+Build the spec only for feature: $fn
 
-Instructions:
-1. Run /spec-first $fn --full to build this feature from scratch
-2. This is an independent build from $MAIN_BRANCH — do not assume other features exist
-3. Create the spec, write tests, implement, and commit
-4. Regenerate mapping: run ./scripts/generate-mapping.sh
-5. Commit all changes with a descriptive message
+This is an independent build from $MAIN_BRANCH — do not assume other features exist.
 
-CRITICAL IMPLEMENTATION RULES:
-- NO mock data, fake JSON, or placeholder content. All features use real DB queries and real API calls.
-- NO fake API endpoints that return static JSON. Every route must do real work.
-- NO placeholder UI. Components must be wired to real data sources.
-- Features must work end-to-end with real user data or they are not done.
-- Real validation, real error handling, real flows.
+1. Run /spec-first $fn (WITHOUT --full) — create or update the spec only
+2. Do NOT implement yet. Regenerate mapping: run ./scripts/generate-mapping.sh
 
-After completion, output exactly one of:
-FEATURE_BUILT: $fn
-BUILD_FAILED: {reason}
+Output exactly one of:
+FEATURE_SPEC_READY: $fn
+SPEC_FILE: {path to .feature.md}
+SPEC_FAILED: {reason}
 "
 
             BUILD_OUTPUT=$(mktemp)
-            run_agent "$BUILD_MODEL" "$INDEP_PROMPT" 2>&1 | tee "$BUILD_OUTPUT" || true
+            log "[independent] Phase 1: Spec for $fn"
+            run_agent "$SPEC_MODEL" "$INDEP_SPEC_PROMPT" 2>&1 | tee "$BUILD_OUTPUT" || true
+            INDEP_SPEC_RESULT=$(cat "$BUILD_OUTPUT")
+
+            if echo "$INDEP_SPEC_RESULT" | grep -q "FEATURE_SPEC_READY"; then
+                INDEP_SPEC_FILE=$(echo "$INDEP_SPEC_RESULT" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | xargs)
+                log "[independent] Phase 2: Implement $fn"
+                run_agent "$BUILD_MODEL" "$(implement_prompt "$fn" "${INDEP_SPEC_FILE:-.specs/features/unknown.feature.md}")" 2>&1 | tee "$BUILD_OUTPUT" || true
+            else
+                echo "$INDEP_SPEC_RESULT" > "$BUILD_OUTPUT"
+            fi
             BUILD_RESULT=$(cat "$BUILD_OUTPUT")
             rm -f "$BUILD_OUTPUT"
 

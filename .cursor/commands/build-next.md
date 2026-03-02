@@ -14,7 +14,7 @@ Pick the next pending feature from the roadmap and build it through the full TDD
 ## What This Command Does
 
 1. **Select** - Find the next buildable feature (pending, dependencies met)
-2. **Spec** - Create feature spec with `/spec-first --full`
+2. **Spec** - Create or update feature spec
 3. **Build** - Implement through TDD cycle (includes self-check drift)
 4. **Update** - Mark roadmap as complete, sync Jira
 5. **Build Check** - Shell verifies compilation (auto-detected or `BUILD_CHECK_CMD`)
@@ -24,6 +24,11 @@ Pick the next pending feature from the roadmap and build it through the full TDD
 9. **PR** - Create PR (if in overnight mode)
 
 All agents receive the test command and are told to iterate until tests pass. The retry agent also receives the actual build/test failure output so it knows exactly what to fix.
+
+### Manual vs Automated Flow
+
+- **Manual** (interactive): You run `/spec-first {feature} --full` in one call — spec, tests, implement, compound, commit. Steps 5–8 are run by the build loop scripts when you use them.
+- **Automated** (scripts): `build-loop-local.sh` and `overnight-autonomous.sh` use a **two-phase** flow — they do not invoke this command. Phase 1: spec-only (no `--full`). Phase 2: implement from spec. Each phase gets a fresh context window. Why two-phase: spec can be reviewed before implementation; implement phase can retry independently.
 
 ---
 
@@ -133,7 +138,7 @@ Execute the full TDD cycle for this feature:
 ```
 
 The `--full` flag means:
-- Create spec (no pause)
+- Create or update spec (no pause)
 - Write tests (no pause)
 - Implement until tests pass
 - Commit changes
@@ -306,8 +311,8 @@ Run /build-next after #6 completes.
 
 ## Overnight Automation
 
-When called from `overnight-autonomous.sh`, `/build-next`:
-- Runs in non-interactive mode
+The overnight script (`overnight-autonomous.sh`) follows the same workflow as /build-next: it selects the next feature, creates the spec, implements it, and runs post-build validation (build check, tests, drift check). It does **not** invoke the /build-next command directly — it runs its own spec + implement prompts. When running overnight:
+- Non-interactive mode
 - Creates draft PRs automatically
 - Continues to next feature up to MAX_FEATURES
 - Reports summary at end
@@ -339,6 +344,7 @@ POST_BUILD_STEPS="test"                          # Default: just tests
 # Model selection (per-step, each gets a fresh context window)
 # Run `agent --list-models` to see available models
 AGENT_MODEL=""                                   # Default for all steps (empty = CLI default)
+SPEC_MODEL=""                                    # Spec phase (build-loop, overnight)
 BUILD_MODEL=""                                   # Main build agent (/build-next → /spec-first)
 RETRY_MODEL=""                                   # Retry agent (fixing failures)
 DRIFT_MODEL=""                                   # Catch-drift agent

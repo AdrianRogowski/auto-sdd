@@ -135,29 +135,37 @@ Or from an existing app:
 
 Every feature build goes through a multi-stage pipeline. Each agent-based step runs in a **fresh context window** — you can assign different AI models to each step.
 
+**Manual** (`/build-next` in Cursor/Claude): Uses `/spec-first --full` in one call — spec, tests, implement, compound, commit.
+
+**Automated** (scripts): Uses a **two-phase** flow — spec-only (no `--full`) then implement from spec. Each phase gets a fresh context; spec can be reviewed before implementation; implement phase can retry independently.
+
 ```
-┌─────────────┐  ┌───────────┐  ┌───────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────────┐
-│   BUILD     │─▶│  BUILD    │─▶│   TEST    │─▶│ DRIFT CHECK │─▶│CODE REVIEW  │─▶│  COMMIT  │
-│ (spec-first │  │  CHECK    │  │  SUITE    │  │ (fresh agent│  │(fresh agent,│  │          │
-│  --full)    │  │ (compile) │  │ (npm test)│  │  Layer 2)   │  │ optional)   │  │          │
-└─────────────┘  └───────────┘  └───────────┘  └─────────────┘  └─────────────┘  └──────────┘
-      │               │               │               │                │
-      └── retry ◄─────┴── retry ◄─────┘               │                │
-                                                       ▼                ▼
-                                              build+tests re-run  build+tests re-run
-                                              (agents modify code)  (agents modify code)
+┌─────────────┐  ┌─────────────┐  ┌───────────┐  ┌───────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────────┐
+│ SPEC PHASE  │─▶│ IMPLEMENT   │─▶│  BUILD    │─▶│   TEST    │─▶│ DRIFT CHECK │─▶│CODE REVIEW  │─▶│  COMMIT  │
+│ (agent)     │  │ PHASE       │  │  CHECK    │  │  SUITE    │  │ (fresh agent│  │(fresh agent,│  │          │
+│             │  │ (agent)     │  │ (compile)  │  │ (npm test)│  │  Layer 2)   │  │ optional)   │  │          │
+└─────────────┘  └─────────────┘  └───────────┘  └───────────┘  └─────────────┘  └─────────────┘  └──────────┘
+      │                 │               │               │               │                │
+      └── retry ◄───────┴── retry ◄─────┴── retry ◄─────┘               │                │
+                                                                         ▼                ▼
+                                                                build+tests re-run  build+tests re-run
+                                                                (agents modify code)  (agents modify code)
 ```
 
-| Stage | Type | Controls | Blocking? | Re-validates? |
-|-------|------|----------|-----------|---------------|
-| Build check | Shell (compile/type check) | `BUILD_CHECK_CMD` | Yes (retry) | — |
-| Test suite | Shell (test runner) | `TEST_CHECK_CMD` | Yes (retry) | — |
-| Drift check | Agent (fresh context) | `DRIFT_CHECK=true` | Yes (retry) | build + tests after fix |
-| Code review | Agent (fresh context) | `POST_BUILD_STEPS` | No (warn only) | build + tests after fix |
+| Stage | Type | Model | Controls | Blocking? | Re-validates? |
+|-------|------|-------|----------|-----------|---------------|
+| Spec phase | Agent | `SPEC_MODEL` | — | Yes (retry) | — |
+| Implement phase | Agent | `BUILD_MODEL` | — | Yes (retry) | — |
+| Build check | Shell | — | `BUILD_CHECK_CMD` | Yes (retry) | — |
+| Test suite | Shell | — | `TEST_CHECK_CMD` | Yes (retry) | — |
+| Drift check | Agent | `DRIFT_MODEL` | `DRIFT_CHECK=true` | Yes (retry) | build + tests after fix |
+| Code review | Agent | `REVIEW_MODEL` | `POST_BUILD_STEPS` | No (warn only) | build + tests after fix |
+
+**Data flow**: Spec phase outputs `FEATURE_SPEC_READY` + `SPEC_FILE` → implement phase. Implement phase outputs `FEATURE_BUILT` + `SOURCE_FILES` → drift check. Build/test failures feed `LAST_BUILD_OUTPUT` and `LAST_TEST_OUTPUT` into the retry agent.
 
 **Agents are test-aware**: Every agent receives the test command and is told to run tests and iterate until they pass. The retry agent also receives the actual failure output (last 50/80 lines of build/test errors) so it knows exactly what to fix. After each agent step, the shell re-runs build + tests as a safety net — **zero additional AI tokens** for that verification.
 
-**Model selection**: Each agent step can use a different model via `BUILD_MODEL`, `DRIFT_MODEL`, `REVIEW_MODEL`, etc.
+**Model selection**: Each agent step can use a different model via `SPEC_MODEL`, `BUILD_MODEL`, `RETRY_MODEL`, `DRIFT_MODEL`, `REVIEW_MODEL`.
 
 ## Slash Commands
 
@@ -165,8 +173,8 @@ Every feature build goes through a multi-stage pipeline. Each agent-based step r
 
 | Command | Purpose |
 |---------|---------|
-| `/spec-first` | Create feature spec with Gherkin + ASCII mockup |
-| `/spec-first --full` | Create spec AND build without pauses |
+| `/spec-first` | Create or update feature spec with Gherkin + ASCII mockup |
+| `/spec-first --full` | Create/update spec AND build without pauses (full TDD cycle) |
 | `/compound` | Extract learnings from current session |
 | `/spec-init` | Bootstrap SDD on existing codebase |
 
@@ -348,9 +356,11 @@ POST_BUILD_STEPS="test"       # Comma-separated: test, code-review
 DRIFT_CHECK=true              # Spec↔code drift detection
 
 # Model selection (per-step, each gets a fresh context window)
-# Cursor: use composer-1.5, sonnet-4.5; Claude: use claude-sonnet-4-5, etc.
+# Cursor: composer-1.5, sonnet-4.5; Claude: claude-sonnet-4-5, etc.
 AGENT_MODEL="composer-1.5"    # Default for all steps (empty = CLI default)
-BUILD_MODEL=""                # Main build agent
+SPEC_MODEL=""                 # Spec phase (find feature, create spec only)
+BUILD_MODEL=""                # Implement phase (tests, implement, compound, commit)
+RETRY_MODEL=""                # Retry agent (fixing build/test failures)
 DRIFT_MODEL=""                # Catch-drift agent
 REVIEW_MODEL=""               # Code-review agent
 ```
@@ -432,8 +442,8 @@ CLI_PROVIDER=claude ./scripts/build-loop-local.sh
 # Full validation: tests + code review
 POST_BUILD_STEPS="test,code-review" ./scripts/build-loop-local.sh
 
-# Use Opus for building, cheap model for validation
-BUILD_MODEL="opus-4.6-thinking" DRIFT_MODEL="gemini-3-flash" ./scripts/build-loop-local.sh
+# Use Opus for spec (strong at planning), cheaper for implementation
+SPEC_MODEL="opus-4.6-thinking" BUILD_MODEL="composer-1.5" ./scripts/build-loop-local.sh
 
 # Branch strategies (set in .env.local or pass inline)
 BRANCH_STRATEGY=independent ./scripts/build-loop-local.sh   # Each feature isolated (worktrees)

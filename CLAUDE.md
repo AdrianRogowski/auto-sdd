@@ -48,21 +48,28 @@ This project uses a spec-driven development workflow. Follow these rules in all 
 
 ## When Implementing Features
 
+### /spec-first: Create vs Update
+
+`/spec-first` automatically detects whether to create or update:
+
+1. **Resolve spec**: Search `.specs/features/**/*.feature.md` for a spec matching the feature name (by path or frontmatter `feature:`)
+2. **If match found** → UPDATE mode: revise scenarios and mockup, preserve status/tests/components. With `--full`, continues through tests → implement → compound → commit
+3. **If no match** → CREATE mode: create new spec with Gherkin + ASCII mockup
+
 ### For New Features
-1. Check if spec exists in `.specs/features/`
-2. If not, create one with Gherkin scenarios + ASCII mockup
-3. Reference design tokens in mockups
-4. Create component stubs for new UI components
-5. **STOP for approval** before writing tests
-6. Write failing tests
-7. Implement until tests pass
-8. Fill in component documentation
+1. Run `/spec-first {feature}` — it will CREATE a spec if none exists
+2. Reference design tokens in mockups
+3. Create component stubs for new UI components
+4. **STOP for approval** before writing tests (unless `--full`)
+5. Write failing tests
+6. Implement until tests pass
+7. Fill in component documentation
 
 ### For Existing Features
-1. Read the feature spec first
-2. Update spec if behavior changes
+1. Run `/spec-first {feature}` — it will UPDATE the spec if one exists (matched by name or path)
+2. Or read the spec first and update manually if behavior changes
 3. Update tests to match
-4. Update `.specs/mapping.md`
+4. Update `.specs/mapping.md` (or run `./scripts/generate-mapping.sh`)
 
 ### For Bug Fixes
 1. Check if spec defines expected behavior
@@ -187,8 +194,8 @@ When new components are created:
 | Command | Purpose |
 |---------|---------|
 | `/spec-init` | Bootstrap on existing codebase |
-| `/spec-first` | Create spec + mockup for new feature |
-| `/spec-first --full` | Create spec AND build without pauses |
+| `/spec-first` | Create or update spec + mockup (auto-detects create vs update) |
+| `/spec-first --full` | Create/update spec AND build without pauses (full TDD cycle) |
 
 ### Core Workflow
 | Command | Purpose |

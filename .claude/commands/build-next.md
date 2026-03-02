@@ -2,6 +2,8 @@
 
 Pick the next pending feature from the roadmap and build it through the full TDD cycle.
 
+> See `.cursor/commands/build-next.md` for full spec including Jira MCP syntax.
+
 ## Usage
 
 ```
@@ -14,11 +16,21 @@ Pick the next pending feature from the roadmap and build it through the full TDD
 ## What This Command Does
 
 1. **Select** - Find the next buildable feature (pending, dependencies met)
-2. **Spec** - Create feature spec with `/spec-first --full`
+2. **Spec** - Create or update feature spec with `/spec-first --full`
 3. **Build** - Implement through TDD cycle (includes self-check drift)
 4. **Update** - Mark roadmap as complete, sync Jira
-5. **Drift Check** - Build loop runs a fresh agent to verify spec↔code alignment
-6. **PR** - Create PR (if in overnight mode)
+5. **Build Check** - Shell verifies compilation (auto-detected or `BUILD_CHECK_CMD`)
+6. **Test Suite** - Shell runs tests (auto-detected or `TEST_CHECK_CMD`) — failures retry the build
+7. **Drift Check** - Fresh agent verifies spec↔code alignment, runs tests, iterates until passing
+8. **Code Review** - Fresh agent reviews quality, runs tests, iterates until passing (optional)
+9. **PR** - Create PR (if in overnight mode)
+
+All agents receive the test command and are told to iterate until tests pass. The retry agent also receives the actual build/test failure output so it knows exactly what to fix.
+
+### Manual vs Automated Flow
+
+- **Manual** (interactive): You run `/spec-first {feature} --full` in one call — spec, tests, implement, compound, commit. Steps 5–8 are run by the build loop scripts when you use them.
+- **Automated** (scripts): `build-loop-local.sh` and `overnight-autonomous.sh` use a **two-phase** flow — they do not invoke this command. Phase 1: spec-only (no `--full`). Phase 2: implement from spec. Each phase gets a fresh context window. Why two-phase: spec can be reviewed before implementation; implement phase can retry independently.
 
 ---
 
@@ -114,7 +126,7 @@ Execute the full TDD cycle for this feature:
 ```
 
 The `--full` flag means:
-- Create spec (no pause)
+- Create or update spec (no pause)
 - Write tests (no pause)
 - Implement until tests pass
 - Commit changes
@@ -265,8 +277,8 @@ Run /build-next after #6 completes.
 
 ## Overnight Automation
 
-When called from `overnight-autonomous.sh`, `/build-next`:
-- Runs in non-interactive mode
+The overnight script (`overnight-autonomous.sh`) follows the same workflow as /build-next: it selects the next feature, creates the spec, implements it, and runs post-build validation (build check, tests, drift check). It does **not** invoke the /build-next command directly — it runs its own spec + implement prompts. When running overnight:
+- Non-interactive mode
 - Creates draft PRs automatically
 - Continues to next feature up to MAX_FEATURES
 - Reports summary at end
@@ -288,6 +300,25 @@ SLACK_NOTIFY_COMPLETE=true
 
 # PR creation (for automated runs)
 CREATE_PR_ON_COMPLETE=true
+
+# Post-build validation (used by build-loop-local.sh and overnight-autonomous.sh)
+BUILD_CHECK_CMD=""                               # Auto-detected if empty
+TEST_CHECK_CMD=""                                # Auto-detected if empty
+POST_BUILD_STEPS="test"                          # Default: just tests
+# POST_BUILD_STEPS="test,code-review"            # Tests + quality review
+
+# Model selection (per-step, each gets a fresh context window)
+# Run `agent --list-models` to see available models
+AGENT_MODEL=""                                   # Default for all steps (empty = CLI default)
+SPEC_MODEL=""                                    # Spec phase (build-loop, overnight)
+BUILD_MODEL=""                                   # Main build agent (/build-next → /spec-first)
+RETRY_MODEL=""                                   # Retry agent (fixing failures)
+DRIFT_MODEL=""                                   # Catch-drift agent
+REVIEW_MODEL=""                                  # Code-review agent
+# Example: Opus for building, cheaper model for validation
+# BUILD_MODEL="opus-4.6-thinking"
+# DRIFT_MODEL="gemini-3-flash"
+# REVIEW_MODEL="sonnet-4.5"
 ```
 
 ---
@@ -314,12 +345,30 @@ Agent:
 8. Updates roadmap: #5 → ✅
 9. Syncs Jira: PROJ-105 → Done + comment
 10. Reports success with signals
-11. Build loop runs fresh-agent drift check (Layer 2)
-
-✅ Feature #5 built: Dashboard
-Roadmap progress: 5/18 (28%)
 
 FEATURE_BUILT: Dashboard
 SPEC_FILE: .specs/features/dashboard/dashboard.feature.md
 SOURCE_FILES: app/(protected)/dashboard/page.tsx, components/dashboard-stats.tsx
+
+--- Build loop takes over (shell + fresh agents) ---
+
+11. Build check: `npx tsc --noEmit` → ✅
+12. Test suite: `npm test` → ✅
+13. Drift check (fresh agent):
+    - Receives spec file + source files + test command
+    - Compares spec vs code, runs tests, iterates until aligned + passing
+    - → NO_DRIFT ✅
+14. Code review (fresh agent, if POST_BUILD_STEPS includes "code-review"):
+    - Reviews code quality, runs tests after fixes
+    - → REVIEW_CLEAN ✅
+15. Shell re-runs build + tests after agent steps (zero-token safety net)
+16. ✅ Feature #5 complete
+
+--- If step 12 had failed ---
+
+12. Test suite: `npm test` → ❌ (3 tests failing)
+    Shell captures last 80 lines of test output
+    → Retry agent launched with failure output in prompt
+    → Agent reads errors, fixes code, reruns tests
+    → Loop back to step 11
 ```

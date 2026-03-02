@@ -103,6 +103,7 @@ fi
 
 # Cursor CLI default; run `agent --list-models` to see available models
 AGENT_MODEL="${AGENT_MODEL:-composer-1.5}"
+SPEC_MODEL="${SPEC_MODEL:-}"
 BUILD_MODEL="${BUILD_MODEL:-}"
 RETRY_MODEL="${RETRY_MODEL:-}"
 DRIFT_MODEL="${DRIFT_MODEL:-}"
@@ -224,8 +225,8 @@ Output: REVIEW_CLEAN or REVIEW_FIXED: {summary} or REVIEW_FAILED: {reason}
 
 log "Test suite: ${TEST_CMD:-disabled}"
 log "Post-build steps: ${POST_BUILD_STEPS:-none}"
-if [ -n "$AGENT_MODEL" ] || [ -n "$BUILD_MODEL" ] || [ -n "$DRIFT_MODEL" ] || [ -n "$REVIEW_MODEL" ]; then
-    log "Models: default=${AGENT_MODEL:-CLI default} build=${BUILD_MODEL:-↑} drift=${DRIFT_MODEL:-↑} review=${REVIEW_MODEL:-↑}"
+if [ -n "$AGENT_MODEL" ] || [ -n "$SPEC_MODEL" ] || [ -n "$BUILD_MODEL" ] || [ -n "$DRIFT_MODEL" ] || [ -n "$REVIEW_MODEL" ]; then
+    log "Models: default=${AGENT_MODEL:-CLI default} spec=${SPEC_MODEL:-↑} build=${BUILD_MODEL:-↑} drift=${DRIFT_MODEL:-↑} review=${REVIEW_MODEL:-↑}"
 fi
 
 # ── Drift check helpers ──────────────────────────────────────────────────
@@ -458,35 +459,70 @@ for i in $(seq 1 "$MAX_FEATURES"); do
     
     git checkout -b "$BRANCH_NAME"
     
-    # Run /build-next
+    # Run /build-next: spec phase then implement phase
     BUILD_OUTPUT=$(mktemp)
-    
-    build_prompt="
-Run the /build-next command to:
+
+    spec_prompt="
+Run the /build-next command to find the next feature, then create the spec ONLY:
 1. Read .specs/roadmap.md and find the next pending feature
 2. Check that all dependencies are completed
 3. If a feature is ready:
    - Update roadmap to mark it 🔄 in progress
-   - Run /spec-first {feature} --full to build it (includes /compound)
-   - Update roadmap to mark it ✅ completed
-   - Sync Jira status if configured
+   - Run /spec-first {feature} (WITHOUT --full) — create or update the spec only, do NOT implement
+   - Do NOT write tests, do NOT implement, do NOT commit yet
+   - Regenerate mapping: run ./scripts/generate-mapping.sh
 4. If no features are ready, output: NO_FEATURES_READY
-5. If build fails, output: BUILD_FAILED: {reason}
+5. If spec fails, output: SPEC_FAILED: {reason}
 
-After completion, output EXACTLY these signals (each on its own line):
-FEATURE_BUILT: {feature name}
-SPEC_FILE: {path to the .feature.md file you created/updated}
-SOURCE_FILES: {comma-separated paths to source files created/modified}
+Output EXACTLY:
+FEATURE_SPEC_READY: {feature name}
+SPEC_FILE: {path to .feature.md}
 
 Or: NO_FEATURES_READY
-Or: BUILD_FAILED: {reason}
-
-The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported.
+Or: SPEC_FAILED: {reason}
 "
-    run_agent "$BUILD_MODEL" "$build_prompt" > "$BUILD_OUTPUT" 2>&1 || true
-    
+    log "Phase 1: Spec"
+    run_agent "$SPEC_MODEL" "$spec_prompt" > "$BUILD_OUTPUT" 2>&1 || true
+    SPEC_RESULT=$(cat "$BUILD_OUTPUT")
+
+    if echo "$SPEC_RESULT" | grep -q "FEATURE_SPEC_READY"; then
+        FEATURE_FOR_IMPL=$(echo "$SPEC_RESULT" | grep "FEATURE_SPEC_READY" | cut -d: -f2- | xargs)
+        SPEC_FILE_FOR_IMPL=$(echo "$SPEC_RESULT" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | xargs)
+        implement_prompt="
+The spec for \"$FEATURE_FOR_IMPL\" exists at $SPEC_FILE_FOR_IMPL. Implement it through the full TDD cycle:
+
+1. Read the spec file and all its Gherkin scenarios
+2. Write failing tests covering ALL scenarios
+3. Implement until all tests pass
+4. Run /compound to extract learnings
+5. Regenerate mapping: run ./scripts/generate-mapping.sh
+6. Update roadmap to mark the feature ✅ completed
+7. Sync Jira status if configured
+8. Commit all changes with a descriptive message
+
+CRITICAL IMPLEMENTATION RULES (from roadmap):
+- NO mock data, fake JSON, or placeholder content. All features use real DB queries and real API calls.
+- NO fake API endpoints that return static JSON. Every route must do real work.
+- NO placeholder UI. Components must be wired to real data sources.
+- Features must work end-to-end with real user data or they are not done.
+- Real validation, real error handling, real flows.
+
+Output EXACTLY these signals (each on its own line):
+FEATURE_BUILT: $FEATURE_FOR_IMPL
+SPEC_FILE: $SPEC_FILE_FOR_IMPL
+SOURCE_FILES: {comma-separated paths to source files created/modified}
+
+Or if build fails:
+BUILD_FAILED: {reason}
+"
+        log "Phase 2: Implement"
+        run_agent "$BUILD_MODEL" "$implement_prompt" > "$BUILD_OUTPUT" 2>&1 || true
+    else
+        echo "$SPEC_RESULT" > "$BUILD_OUTPUT"
+    fi
+
     BUILD_RESULT=$(cat "$BUILD_OUTPUT")
-    rm "$BUILD_OUTPUT"
+    rm -f "$BUILD_OUTPUT"
     
     # Check result
     if echo "$BUILD_RESULT" | grep -q "NO_FEATURES_READY"; then
@@ -496,10 +532,21 @@ The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported
         break
     fi
     
+    if echo "$BUILD_RESULT" | grep -q "SPEC_FAILED"; then
+        REASON=$(echo "$BUILD_RESULT" | grep "SPEC_FAILED" | cut -d: -f2-)
+        FEATURE_DURATION=$(( $(date +%s) - FEATURE_START ))
+        warn "Spec phase failed: $REASON ($(format_duration $FEATURE_DURATION))"
+        FEATURE_TIMINGS+=("✗ feature $i: $(format_duration $FEATURE_DURATION)")
+        FAILED=$((FAILED + 1))
+        git checkout "$MAIN_BRANCH"
+        git branch -D "$BRANCH_NAME" 2>/dev/null || true
+        continue
+    fi
+
     if echo "$BUILD_RESULT" | grep -q "BUILD_FAILED"; then
         REASON=$(echo "$BUILD_RESULT" | grep "BUILD_FAILED" | cut -d: -f2-)
         FEATURE_DURATION=$(( $(date +%s) - FEATURE_START ))
-        warn "Build failed: $REASON ($(format_duration $FEATURE_DURATION))"
+        warn "Implement phase failed: $REASON ($(format_duration $FEATURE_DURATION))"
         FEATURE_TIMINGS+=("✗ feature $i: $(format_duration $FEATURE_DURATION)")
         FAILED=$((FAILED + 1))
         git checkout "$MAIN_BRANCH"
@@ -516,6 +563,14 @@ The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported
         FEATURE_NAME="${FEATURE_NAME:-feature}"
         
         git commit -m "feat(auto): $FEATURE_NAME" 2>/dev/null || true
+        
+        # Validate: does it build?
+        if ! check_build; then
+            FEATURE_DURATION=$(( $(date +%s) - FEATURE_START ))
+            warn "Build check failed for $FEATURE_NAME ($(format_duration $FEATURE_DURATION))"
+            FEATURE_TIMINGS+=("⚠ $FEATURE_NAME (build): $(format_duration $FEATURE_DURATION)")
+            # Continue to drift check — build failure is documented in the PR
+        fi
         
         # Validate: do tests pass?
         if should_run_step "test" && ! check_tests; then

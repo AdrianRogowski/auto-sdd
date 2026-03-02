@@ -29,8 +29,12 @@ When the user says any of these phrases, **automatically invoke `/spec-first`**:
 | "plan this feature" | Run `/spec-first {feature}` |
 | "write the spec" | Run `/spec-first {feature}` |
 | "create spec" | Run `/spec-first {feature}` |
+| "update the spec for" | Run `/spec-first {feature}` (update mode) |
+| "update spec" | Run `/spec-first {feature}` (update mode) |
 
 Extract the feature description from the rest of their message.
+
+**Create vs Update**: `/spec-first` auto-detects whether to create or update: searches `.specs/features/` for a matching spec (by path or frontmatter `feature:`). Match found → update existing spec. No match → create new spec. With `--full`, both paths continue through tests → implement → compound → commit.
 
 ### Full Mode Triggers
 
@@ -77,8 +81,8 @@ If user includes "full", "auto", "no stops", or "don't pause":
 │                                   │                                     │
 │                    ┌──────────────┼──────────────┐                      │
 │                    ▼              ▼              ▼                      │
-│              Create/detect   Create spec   Create ASCII                 │
-│              design tokens   with Gherkin  mockup                       │
+│              Create/detect   Create/update spec   Create/update ASCII   │
+│              design tokens   with Gherkin         mockup                │
 │                    │              │              │                      │
 │                    └──────────────┴──────────────┘                      │
 │                                   │                                     │
@@ -252,7 +256,7 @@ Then [expected result]
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
 | `/spec-init` | Bootstrap on existing codebase | First time on existing project |
-| `/spec-first` | Create spec + mockup for new feature | Starting any new feature |
+| `/spec-first` | Create or update spec + mockup (auto-detects) | Starting or updating any feature |
 
 ### Core Workflow Commands
 

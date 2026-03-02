@@ -1,8 +1,8 @@
 ---
-description: Create a feature spec with Gherkin scenarios and ASCII mockups (TDD step 1)
+description: Create or update a feature spec with Gherkin scenarios and ASCII mockups (TDD step 1)
 ---
 
-Create the feature specification for: $ARGUMENTS
+Create or update the feature specification for: $ARGUMENTS
 
 ## Mode Detection
 
@@ -11,16 +11,23 @@ Check if `--full` or `--auto` flag is present in the arguments:
 | Mode | Behavior |
 |------|----------|
 | Normal (default) | Stop for approval at each step |
-| Full (`--full` or `--auto`) | Complete TDD cycle without pauses |
+| Full (`--full` or `--auto`) | Complete TDD cycle without pauses (create OR update, then tests → implement → compound → commit) |
 
 ## Instructions
+
+0. **Resolve Spec File (Create vs Update)**
+   - Parse feature description from args (strip `--full`, `--auto`)
+   - Search `.specs/features/**/*.feature.md` for matching spec (by path or frontmatter `feature:`)
+   - **If match found** → UPDATE mode: read spec, preserve status/tests/components/created, update scenarios/mockup, set updated date. **Full mode**: continue through tests → implement → compound → commit
+   - **If no match** → CREATE mode: proceed to step 1
 
 1. **Check/Create Design System**
    - If no `.specs/design-system/tokens.md` exists, create default tokens
    - Inform user of created files
 
-2. **Create Feature Spec with YAML Frontmatter**
-   - Create `.specs/features/{domain}/{feature}.feature.md`
+2. **Create or Update Feature Spec with YAML Frontmatter**
+   - CREATE: Create `.specs/features/{domain}/{feature}.feature.md`
+   - UPDATE: Revise existing spec, preserve status/tests/components
    - Include YAML frontmatter:
      ```yaml
      ---
@@ -48,9 +55,11 @@ Check if `--full` or `--auto` flag is present in the arguments:
 
 5. **Pause Point**
    - **Normal Mode**: STOP - ask "Does this look right? Ready to write tests?"
-   - **Full Mode**: Skip pause, immediately proceed to tests
+   - **Full Mode**: Skip pause, immediately proceed to tests (same for both create and update)
 
 ## After Approval (or immediately in Full Mode)
+
+**Both create and update paths continue through the full loop in Full mode.**
 
 **Step 2: Write Tests**
 1. Write failing tests covering all scenarios
