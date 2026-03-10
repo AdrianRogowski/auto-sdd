@@ -871,7 +871,11 @@ Instructions:
    - Add a brief entry to .specs/learnings/index.md
 7. Prioritize: errors hit > gotchas > decisions > patterns (hard-won knowledge is most valuable)
 8. Update the spec's frontmatter: set updated: $(date '+%Y-%m-%d')
-9. Commit: compound: learnings from $feature_name
+9. Update .specs/roadmap.md:
+   a. Find the row for this feature and change its status emoji from 🔄 to ✅
+   b. Recalculate the Progress summary table at the top of the file by counting the actual status emojis (✅, 🔄, ⬜, ⏸️, ❌) across ALL feature rows in the roadmap. Update the counts to match reality.
+   c. Update the 'Last updated' date
+10. Commit all changes (learnings + roadmap update): compound: learnings from $feature_name
 
 After completion, output:
 COMPOUND_COMPLETE: {brief summary of learnings captured}
@@ -1099,9 +1103,6 @@ run_build_loop() {
                             fi
                         fi
 
-                        # ── Mark roadmap ✅ at script level (after ALL verification) ──
-                        mark_roadmap_status "$feature_name" "✅"
-                        git add -A && git commit -m "chore: mark $feature_name complete in roadmap" --allow-empty 2>/dev/null || true
 
                         LOOP_BUILT=$((LOOP_BUILT + 1))
                         local feature_end=$(date +%s)
