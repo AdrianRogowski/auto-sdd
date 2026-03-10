@@ -1,7 +1,8 @@
-# SDD 2.0.0: Spec-Driven Development + Compound Learning
+# SDD: Spec-Driven Development + Compound Learning
 
 A framework for AI-assisted development that combines:
 - **Spec-Driven Development (SDD)** - Define behavior before implementing
+- **Red-Green-Refactor TDD** - Failing tests → implement → clean up (via `/tdd` command)
 - **User Personas** - Specs are written in users' language, scoped to their patience
 - **Personality-Driven Design** - Design system derived from vision, not generic templates
 - **Compound Learning** - Agent gets smarter from every session
@@ -18,7 +19,7 @@ Add to your `~/.gitconfig`:
 
 ```ini
 [alias]
-    auto = "!f() { git clone --depth 1 https://github.com/AdrianRogowski/auto-sdd.git .sdd-temp && rm -rf .sdd-temp/.git && cp -r .sdd-temp/. . && rm -rf .sdd-temp && echo 'SDD 2.0.0 installed! Run /spec-first to create your first feature spec.'; }; f"
+    auto = "!f() { git clone --depth 1 https://github.com/AdrianRogowski/auto-sdd.git .sdd-temp && rm -rf .sdd-temp/.git && cp -r .sdd-temp/. . && rm -rf .sdd-temp && echo \"SDD $(cat VERSION 2>/dev/null || echo latest) installed! Run /spec-first to create your first feature spec.\"; }; f"
 ```
 
 Then in any project:
@@ -28,7 +29,7 @@ git auto
 ```
 
 This copies all SDD files into your current project:
-- `VERSION` - Framework version (semver, e.g. 2.0.0)
+- `VERSION` - Framework version (semver)
 - `.cursor/` - Cursor rules, commands, hooks
 - `.claude/` - Claude Code commands
 - `.specs/` - Feature specs, learnings, design system, personas, roadmap
@@ -89,7 +90,7 @@ After installing, use the slash commands:
 /personas                          # Create user personas (vocabulary, patience, frustrations)
 /design-tokens                     # Create personality-driven design system
 /spec-first user authentication    # Create a feature spec (informed by personas + tokens)
-/compound                          # Extract learnings after implementing
+/tdd                               # Build it: RED → GREEN → REFACTOR → COMPOUND
 /roadmap create                    # Create a roadmap from the vision
 /build-next                        # Build next feature from roadmap
 ```
@@ -112,34 +113,39 @@ Before building features, set up the project-level infrastructure. Each step rea
 
 All three are optional but improve every spec. `/spec-first` will note what's missing.
 
-### Per Feature: Spec → Test → Implement
+### Per Feature: Spec → Red-Green-Refactor TDD
 
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│    SPEC      │ ──▶ │    TEST      │ ──▶ │  IMPLEMENT   │
-│              │     │  (failing)   │     │ (loop until  │
-│ Reads:       │     │              │     │  tests pass) │
-│ - personas   │     │              │     │              │
-│ - tokens     │     │              │     │              │
-│              │     │              │     │              │
-│ Writes:      │     │              │     │              │
-│ - Gherkin    │     │              │     │              │
-│ - mockup     │     │              │     │              │
-│ - journey    │     │              │     │              │
-│              │     │              │     │              │
-│ Then:        │     │              │     │              │
-│ - persona    │     │              │     │              │
-│   revision   │     │              │     │              │
-└──────┬───────┘     └──────────────┘     └──────┬───────┘
-       │                                         │
-    [PAUSE]                                      ▼
-  user approves                          ┌──────────────┐
-                                         │  /compound   │
-                                         │ (learnings)  │
-                                         └──────────────┘
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│    SPEC      │ ──▶ │  RED (test)  │ ──▶ │ GREEN (impl) │ ──▶ │  REFACTOR    │
+│              │     │  (failing)   │     │ (until tests │     │ (clean up,   │
+│ Reads:       │     │              │     │  pass)       │     │  tests must  │
+│ - personas   │     │              │     │              │     │  still pass) │
+│ - tokens     │     │              │     │              │     │              │
+│              │     │              │     │              │     │              │
+│ Writes:      │     │              │     │              │     │              │
+│ - Gherkin    │     │              │     │              │     │              │
+│ - mockup     │     │              │     │              │     │              │
+│ - journey    │     │              │     │              │     │              │
+│              │     │              │     │              │     │              │
+│ Then:        │     └──────────────┘     └──────┬───────┘     └──────┬───────┘
+│ - persona    │                                 │                     │
+│   revision   │                                 ▼                     ▼
+└──────┬───────┘                          ┌──────────────┐     ┌──────────────┐
+       │                                  │ DRIFT CHECK  │     │ DRIFT CHECK  │
+    [PAUSE]                               │ (layer 1)    │     │ (layer 1b)   │
+  user approves                           └──────────────┘     └──────┬───────┘
+  then /tdd                                                          │
+                                                                     ▼
+                                                              ┌──────────────┐
+                                                              │  /compound   │
+                                                              │ (learnings)  │
+                                                              └──────────────┘
 ```
 
-The SPEC step loads personas and design tokens, writes Gherkin scenarios using the user's vocabulary, creates ASCII mockups referencing design tokens, then re-reads the draft through the persona's eyes and revises. The revision notes appear at the pause point so you see what changed and why.
+The **SPEC** step loads personas and design tokens, writes Gherkin scenarios using the user's vocabulary, creates ASCII mockups referencing design tokens, then re-reads the draft through the persona's eyes and revises. The revision notes appear at the pause point so you see what changed and why.
+
+The **TDD** step (`/tdd` command) runs the full Red-Green-Refactor cycle: write failing tests (RED), implement until they pass (GREEN), self-check drift, refactor the code (tests must still pass), re-check drift, then extract learnings.
 
 ### Roadmap: Full App Build
 
@@ -161,7 +167,7 @@ Or from an existing app:
 ```
 11:00 PM  /roadmap-triage (scan Slack/Jira → add to roadmap)
           /build-next × MAX_FEATURES (build from roadmap)
-            └─ Each feature: spec (with personas) → tests → implement → drift check → [code review] → commit
+            └─ Each feature: spec → RED → GREEN → refactor → drift check → compound → [code review] → commit
           Create draft PRs
  7:00 AM  You review 3-4 draft PRs (specs verified against code)
 ```
@@ -170,37 +176,43 @@ Or from an existing app:
 
 Every feature build goes through a multi-stage pipeline. Each agent-based step runs in a **fresh context window** — you can assign different AI models to each step.
 
-**Manual** (`/build-next` in Cursor/Claude): Uses `/spec-first --full` in one call — spec, tests, implement, compound, commit.
+**Manual** (`/build-next` in Cursor/Claude): Uses `/spec-first --full` — spec, RED, GREEN, refactor, drift check, compound, commit.
 
-**Automated** (scripts): Uses a **two-phase** flow — spec-only (no `--full`) then implement from spec. Each phase gets a fresh context; spec can be reviewed before implementation; implement phase can retry independently.
+**Automated** (scripts): Uses a **5-phase** flow — each phase gets a fresh context window and can use a different model.
 
 ```
-┌─────────────┐  ┌─────────────┐  ┌───────────┐  ┌───────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────────┐
-│ SPEC PHASE  │─▶│ IMPLEMENT   │─▶│  BUILD    │─▶│   TEST    │─▶│ DRIFT CHECK │─▶│CODE REVIEW  │─▶│  COMMIT  │
-│ (agent)     │  │ PHASE       │  │  CHECK    │  │  SUITE    │  │ (fresh agent│  │(fresh agent,│  │          │
-│             │  │ (agent)     │  │ (compile)  │  │ (npm test)│  │  Layer 2)   │  │ optional)   │  │          │
-└─────────────┘  └─────────────┘  └───────────┘  └───────────┘  └─────────────┘  └─────────────┘  └──────────┘
-      │                 │               │               │               │                │
-      └── retry ◄───────┴── retry ◄─────┴── retry ◄─────┘               │                │
-                                                                         ▼                ▼
-                                                                build+tests re-run  build+tests re-run
-                                                                (agents modify code)  (agents modify code)
+┌─────────┐  ┌─────────┐  ┌────────┐  ┌────────┐  ┌──────────┐  ┌────────┐  ┌─────────┐  ┌──────────┐  ┌─────────┐
+│ Phase 1 │─▶│ Phase 2 │─▶│ build  │─▶│  test  │─▶│ Phase 3  │─▶│ build  │─▶│ Phase 4 │─▶│ Phase 5  │─▶│ roadmap │
+│ SPEC    │  │ BUILD   │  │ check  │  │ suite  │  │ REFACTOR │  │+test   │  │ DRIFT   │  │ COMPOUND │  │   ✅    │
+│ (agent) │  │ (agent) │  │(shell) │  │(shell) │  │ (agent)  │  │(shell) │  │ (agent) │  │ (agent)  │  │(script) │
+└─────────┘  └─────────┘  └────────┘  └────────┘  └──────────┘  └────────┘  └─────────┘  └──────────┘  └─────────┘
+     │             │            │           │           │              │           │             │
+     └── retry ◄───┴── retry ◄──┴── retry ◄─┘           │              │           │             │
+                                                  reverts if broken ◄──┘           │             │
+                                                                                   ▼             ▼
+                                                                              build+tests    non-fatal
+                                                                              re-run
 ```
 
-| Stage | Type | Model | Controls | Blocking? | Re-validates? |
-|-------|------|-------|----------|-----------|---------------|
-| Spec phase | Agent | `SPEC_MODEL` | — | Yes (retry) | — |
-| Implement phase | Agent | `BUILD_MODEL` | — | Yes (retry) | — |
-| Build check | Shell | — | `BUILD_CHECK_CMD` | Yes (retry) | — |
-| Test suite | Shell | — | `TEST_CHECK_CMD` | Yes (retry) | — |
-| Drift check | Agent | `DRIFT_MODEL` | `DRIFT_CHECK=true` | Yes (retry) | build + tests after fix |
+| Phase | Type | Model | Controls | Blocking? | Safety net |
+|-------|------|-------|----------|-----------|------------|
+| 1. Spec | Agent | `SPEC_MODEL` | — | Yes (retry) | — |
+| 2. Build (RED→GREEN) | Agent | `BUILD_MODEL` | — | Yes (retry) | — |
+| Post-build check | Shell | — | `BUILD_CHECK_CMD`, `TEST_CHECK_CMD` | Yes (retry) | — |
+| 3. Refactor | Agent | `REFACTOR_MODEL` | `REFACTOR=true` | No (auto-reverts) | Reverts to pre-refactor if build/tests break |
+| Post-refactor check | Shell | — | `BUILD_CHECK_CMD`, `TEST_CHECK_CMD` | — | Triggers revert |
+| 4. Drift check | Agent | `DRIFT_MODEL` | `DRIFT_CHECK=true` | Yes (retry) | build + tests after fix |
+| 5. Compound | Agent | `COMPOUND_MODEL` | `COMPOUND=true` | No (non-fatal) | — |
 | Code review | Agent | `REVIEW_MODEL` | `POST_BUILD_STEPS` | No (warn only) | build + tests after fix |
+| Roadmap ✅ | Script | — | — | — | Only marks complete after ALL phases pass |
 
-**Data flow**: Spec phase outputs `FEATURE_SPEC_READY` + `SPEC_FILE` → implement phase. Implement phase outputs `FEATURE_BUILT` + `SOURCE_FILES` → drift check. Build/test failures feed `LAST_BUILD_OUTPUT` and `LAST_TEST_OUTPUT` into the retry agent.
+**Data flow**: Spec phase outputs `FEATURE_SPEC_READY` + `SPEC_FILE` → build phase. Build phase outputs `FEATURE_BUILT` + `SOURCE_FILES` → refactor, drift, and compound phases. Build/test failures feed `LAST_BUILD_OUTPUT` and `LAST_TEST_OUTPUT` into the retry agent.
 
-**Agents are test-aware**: Every agent receives the test command and is told to run tests and iterate until they pass. The retry agent also receives the actual failure output (last 50/80 lines of build/test errors) so it knows exactly what to fix. After each agent step, the shell re-runs build + tests as a safety net — **zero additional AI tokens** for that verification.
+**Roadmap status**: The spec agent marks the feature 🔄 (in progress). The **script** (not any agent) marks it ✅ only after all phases pass. This prevents features being marked complete when post-build verification fails.
 
-**Model selection**: Each agent step can use a different model via `SPEC_MODEL`, `BUILD_MODEL`, `RETRY_MODEL`, `DRIFT_MODEL`, `REVIEW_MODEL`.
+**Rate limiting**: When using Claude Code (`CLI_PROVIDER=claude`) with rate-limited models, the scripts detect rate limit errors and retry with exponential backoff (configurable via `RATE_LIMIT_BACKOFF` and `RATE_LIMIT_MAX_WAIT`).
+
+**Model selection**: Each phase can use a different model: `SPEC_MODEL`, `BUILD_MODEL`, `REFACTOR_MODEL`, `DRIFT_MODEL`, `COMPOUND_MODEL`, `REVIEW_MODEL`.
 
 ## Slash Commands
 
@@ -218,7 +230,8 @@ Every feature build goes through a multi-stage pipeline. Each agent-based step r
 | Command | Purpose |
 |---------|---------|
 | `/spec-first` | Create or update feature spec with Gherkin + ASCII mockup (persona-informed) |
-| `/spec-first --full` | Create/update spec AND build without pauses (full TDD cycle) |
+| `/spec-first --full` | Create/update spec AND build without pauses (full Red-Green-Refactor cycle) |
+| `/tdd` | Run Red-Green-Refactor cycle from an approved spec |
 | `/compound` | Extract learnings from current session |
 
 ### Roadmap Commands
@@ -234,7 +247,8 @@ Every feature build goes through a multi-stage pipeline. Each agent-based step r
 
 | Command | Purpose |
 |---------|---------|
-| `/sdd-migrate` | Migrate from SDD 1.0 to 2.0 |
+| `/sdd-migrate` | Upgrade SDD to latest version |
+| `/refactor` | Refactor code while keeping tests green |
 | `/catch-drift` | Detect spec ↔ code misalignment |
 | `/check-coverage` | Find gaps in spec/test coverage |
 | `/fix-bug` | Create regression test for bug |
@@ -283,7 +297,8 @@ Unlike generic design token templates, `/design-tokens` derives a **tailored** s
 
 ```
 .
-├── VERSION                 # Framework version (semver, e.g. 2.0.0)
+├── VERSION                 # Framework version (semver)
+├── CHANGELOG.md            # Release history
 ├── .cursor/
 │   ├── commands/           # Slash command definitions
 │   ├── rules/              # Cursor rules (SDD workflow, design tokens)
@@ -333,7 +348,7 @@ Unlike generic design token templates, `/design-tokens` derives a **tailored** s
 
 ### Versioning
 
-SDD uses semantic versioning. The `VERSION` file at the project root holds the framework version (e.g. `2.0.0`). `.specs/.sdd-version` mirrors it for migration detection. To check your version: `cat VERSION`.
+SDD uses semantic versioning (MAJOR.MINOR.PATCH). The `VERSION` file holds the framework version. `.specs/.sdd-version` mirrors it for upgrade detection. To check: `cat VERSION`. See `CHANGELOG.md` for release history.
 
 ## Roadmap System
 
@@ -440,16 +455,24 @@ MAX_FEATURES=4                # Features per overnight run
 BUILD_CHECK_CMD=""            # Auto-detected (tsc, cargo check, etc.)
 TEST_CHECK_CMD=""             # Auto-detected (npm test, pytest, etc.)
 POST_BUILD_STEPS="test"       # Comma-separated: test, code-review
-DRIFT_CHECK=true              # Spec↔code drift detection
+DRIFT_CHECK=true              # Spec↔code drift detection (Phase 4)
+REFACTOR=true                 # Refactor phase after tests pass (Phase 3)
+COMPOUND=true                 # Compound/learnings phase (Phase 5)
 
-# Model selection (per-step, each gets a fresh context window)
+# Model selection (per-phase, each gets a fresh context window)
 # Cursor: composer-1.5, sonnet-4.5; Claude: claude-sonnet-4-5, etc.
-AGENT_MODEL="composer-1.5"    # Default for all steps (empty = CLI default)
-SPEC_MODEL=""                 # Spec phase (find feature, create spec only)
-BUILD_MODEL=""                # Implement phase (tests, implement, compound, commit)
+AGENT_MODEL="composer-1.5"    # Default for all phases (empty = CLI default)
+SPEC_MODEL=""                 # Phase 1: Spec (find feature, create spec only)
+BUILD_MODEL=""                # Phase 2: Build (RED → GREEN, tests + implement)
+REFACTOR_MODEL=""             # Phase 3: Refactor (clean up, tests must pass)
+DRIFT_MODEL=""                # Phase 4: Catch-drift agent
+COMPOUND_MODEL=""             # Phase 5: Compound/learnings agent
 RETRY_MODEL=""                # Retry agent (fixing build/test failures)
-DRIFT_MODEL=""                # Catch-drift agent
-REVIEW_MODEL=""               # Code-review agent
+REVIEW_MODEL=""               # Code-review agent (optional)
+
+# Rate limit handling (Claude Code with rate-limited models)
+RATE_LIMIT_BACKOFF=60         # Initial wait in seconds
+RATE_LIMIT_MAX_WAIT=18000     # Max wait (~5 hours)
 ```
 
 ## Feature Spec Format
@@ -550,6 +573,15 @@ BRANCH_STRATEGY=sequential ./scripts/build-loop-local.sh   # All features on cur
 
 # Base branch (default: current branch for build-loop, main for overnight)
 BASE_BRANCH=develop ./scripts/build-loop-local.sh
+
+# Skip refactor phase (faster builds)
+REFACTOR=false ./scripts/build-loop-local.sh
+
+# Skip compound/learnings phase
+COMPOUND=false ./scripts/build-loop-local.sh
+
+# Claude Code with rate-limit handling (longer backoff for Opus)
+CLI_PROVIDER=claude RATE_LIMIT_BACKOFF=120 RATE_LIMIT_MAX_WAIT=18000 ./scripts/build-loop-local.sh
 ```
 
 ## Requirements
