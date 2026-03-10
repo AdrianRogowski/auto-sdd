@@ -1,5 +1,7 @@
 # Changelog
 
+Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
+
 ## 2.1.0 — Red-Green-Refactor TDD
 
 ### New
