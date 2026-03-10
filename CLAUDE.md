@@ -10,25 +10,26 @@ This project uses a spec-driven development workflow. Follow these rules in all 
 Project setup (once):
   /vision → /personas → /design-tokens
 
-Per feature:
-  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-  │    SPEC      │ ──▶ │    TEST      │ ──▶ │  IMPLEMENT   │
-  │ (reads       │     │  (failing)   │     │ (loop until  │
-  │  personas +  │     │              │     │  tests pass) │
-  │  tokens,     │     │              │     │              │
-  │  writes      │     │              │     │              │
-  │  Gherkin +   │     │              │     │              │
-  │  mockup,     │     │              │     │              │
-  │  revises via │     │              │     │              │
-  │  persona     │     │              │     │              │
-  │  lens)       │     │              │     │              │
-  └──────┬───────┘     └──────────────┘     └──────┬───────┘
-         │                                         │
-      [PAUSE]                                      ▼
-    user approves                          ┌──────────────┐
-                                           │  COMPOUND    │
-                                           │ (learnings)  │
-                                           └──────────────┘
+Per feature (Red-Green-Refactor TDD):
+  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+  │    SPEC      │ ──▶ │  RED (test)  │ ──▶ │ GREEN (impl) │ ──▶ │  REFACTOR    │
+  │ (Gherkin +   │     │  (failing)   │     │ (until tests │     │ (clean up,   │
+  │  mockup +    │     │              │     │  pass)       │     │  tests must  │
+  │  persona     │     │              │     │              │     │  still pass) │
+  │  revision)   │     │              │     │              │     │              │
+  └──────┬───────┘     └──────────────┘     └──────┬───────┘     └──────┬───────┘
+         │                                         │                     │
+      [PAUSE]                                      ▼                     ▼
+    user approves                           ┌──────────────┐     ┌──────────────┐
+    then /tdd                               │ DRIFT CHECK  │     │ DRIFT CHECK  │
+                                            │ (layer 1)    │     │ (layer 1b)   │
+                                            └──────────────┘     └──────┬───────┘
+                                                                        │
+                                                                        ▼
+                                                                 ┌──────────────┐
+                                                                 │  COMPOUND    │
+                                                                 │ (learnings)  │
+                                                                 └──────────────┘
 ```
 
 ---
@@ -143,10 +144,15 @@ When implementing UI, use token names from `tokens.md` (not hardcoded values). T
 4. Creates ASCII mockup referencing design tokens
 5. Adds user journey (where this feature fits in the flow)
 6. Runs persona revision pass, notes changes
-7. **STOP for approval** before writing tests (unless `--full`)
-8. Write failing tests
-9. Implement until tests pass
-10. Fill in component documentation
+7. **STOP for approval** — "Run `/tdd` when ready" (unless `--full`)
+8. Run `/tdd` — full Red-Green-Refactor cycle:
+   - RED: Write failing tests
+   - GREEN: Implement until tests pass
+   - Drift check (Layer 1)
+   - REFACTOR: Clean up code, tests must still pass
+   - Drift check (Layer 1b)
+   - Compound: Extract learnings
+9. Fill in component documentation
 
 ### For Existing Features
 1. Run `/spec-first {feature}` — it will UPDATE the spec if one exists
@@ -173,8 +179,7 @@ If the user says any of these, create the spec and **STOP** - wait for approval:
 - "plan this first"
 - "hold on" / "wait"
 
-After showing spec: "Does this look right? Ready to write tests?"
-After tests written: "Tests written (failing). Ready to implement?"
+After showing spec: "Does this look right? Run `/tdd` when ready, or say 'go ahead' to start the Red-Green-Refactor cycle."
 
 ---
 
@@ -257,7 +262,8 @@ Then [expected result]
 | `/personas` | Create or update user personas |
 | `/design-tokens` | Create or update design tokens (personality-driven) |
 | `/spec-first` | Create or update spec + mockup (auto-detects create vs update) |
-| `/spec-first --full` | Create/update spec AND build without pauses (full TDD cycle) |
+| `/spec-first --full` | Create/update spec AND build without pauses (full Red-Green-Refactor cycle) |
+| `/tdd` | Run the Red-Green-Refactor cycle from an approved spec |
 
 ### Core Workflow
 | Command | Purpose |
@@ -436,10 +442,15 @@ Status symbols:
 3. `/design-tokens` creates personality-driven tokens (from vision + personas)
 4. `/roadmap` or `/clone-app` creates roadmap.md
 5. `/build-next` picks next pending feature (deps met)
-6. Runs `/spec-first --full` to build it (includes self-check drift)
-7. Build loop runs fresh-agent drift check (Layer 2)
-8. Updates roadmap status
-9. Repeat until done
+6. Build loop runs per feature:
+   - Phase 1: Spec agent (creates spec)
+   - Phase 2: Build agent (RED → GREEN + self-check drift)
+   - Post-build: build + test verification
+   - Phase 3: Refactor agent (clean up code, tests must pass)
+   - Phase 4: Drift check agent (Layer 2, fresh context)
+   - Phase 5: Compound agent (extract learnings)
+   - Script marks roadmap ✅ (only after ALL phases pass)
+7. Repeat until done
 
 ---
 
@@ -449,18 +460,24 @@ Spec↔code drift is enforced at two layers:
 
 ### Layer 1: Self-Check (same agent, lightweight)
 
-Built into `/spec-first --full` between implement and compound:
+Built into the build agent (Phase 2) after GREEN:
 - The build agent re-reads its own Gherkin scenarios
 - Compares against what it actually implemented
 - Fixes obvious mismatches before committing
 
 This is cheap (same context) but has the "fox guarding henhouse" limitation.
 
+### Layer 1b: Post-Refactor Self-Check
+
+Built into `/tdd` and `/spec-first --full` after the refactor step:
+- Re-verify spec↔code alignment after refactoring
+- Catch any subtle behavior changes from refactoring
+
 ### Layer 2: Fresh-Agent Cross-Check (separate agent, thorough)
 
-Built into `build-loop-local.sh` and `overnight-autonomous.sh`:
-- After the build agent commits, a **separate agent** is spawned
-- It reads the spec file and source files with fresh context
+Built into `build-loop-local.sh` and `overnight-autonomous.sh` (Phase 4):
+- After refactor, a **separate agent** is spawned with fresh context
+- Reads the spec file and source files without prior build context
 - Reports `NO_DRIFT`, `DRIFT_FIXED`, or `DRIFT_UNRESOLVABLE`
 - Feature is only marked complete if drift is clean
 

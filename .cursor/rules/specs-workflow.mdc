@@ -33,9 +33,19 @@ When the user says any of these phrases, **automatically invoke `/spec-first`**:
 | "update the spec for" | Run `/spec-first {feature}` (update mode) |
 | "update spec" | Run `/spec-first {feature}` (update mode) |
 
+When the user says any of these after a spec is shown, **invoke `/tdd`**:
+
+| User says | Action |
+|-----------|--------|
+| "tdd" | Run `/tdd {feature}` |
+| "go ahead" | Run `/tdd` with current spec |
+| "build it" | Run `/tdd` with current spec |
+| "implement it" | Run `/tdd` with current spec |
+| "ship it" | Run `/tdd` with current spec |
+
 Extract the feature description from the rest of their message.
 
-**Create vs Update**: `/spec-first` auto-detects whether to create or update: searches `.specs/features/` for a matching spec (by path or frontmatter `feature:`). Match found → update existing spec. No match → create new spec. With `--full`, both paths continue through tests → implement → compound → commit.
+**Create vs Update**: `/spec-first` auto-detects whether to create or update: searches `.specs/features/` for a matching spec (by path or frontmatter `feature:`). Match found → update existing spec. No match → create new spec. With `--full`, both paths continue through the full Red-Green-Refactor TDD cycle.
 
 ### Full Mode Triggers
 
@@ -93,31 +103,37 @@ All three are optional but improve every spec that follows. `/spec-first` will n
 
 ---
 
-## The Core Loop (Per Feature)
+## The Core Loop (Per Feature — Red-Green-Refactor TDD)
 
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│    SPEC      │ ──▶ │    TEST      │ ──▶ │  IMPLEMENT   │
-│              │     │  (failing)   │     │ (loop until  │
-│ Reads:       │     │              │     │  tests pass) │
-│ - personas   │     │              │     │              │
-│ - tokens     │     │              │     │              │
-│              │     │              │     │              │
-│ Writes:      │     │              │     │              │
-│ - Gherkin    │     │              │     │              │
-│ - mockup     │     │              │     │              │
-│ - journey    │     │              │     │              │
-│              │     │              │     │              │
-│ Then:        │     │              │     │              │
-│ - persona    │     │              │     │              │
-│   revision   │     │              │     │              │
-└──────┬───────┘     └──────────────┘     └──────┬───────┘
-       │                                         │
-    [PAUSE]                                      ▼
-  user approves                          ┌──────────────┐
-                                         │  COMPOUND    │
-                                         │ (learnings)  │
-                                         └──────────────┘
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│    SPEC      │ ──▶ │  RED (test)  │ ──▶ │ GREEN (impl) │ ──▶ │  REFACTOR    │
+│              │     │  (failing)   │     │ (until tests │     │ (clean up,   │
+│ Reads:       │     │              │     │  pass)       │     │  tests must  │
+│ - personas   │     │              │     │              │     │  still pass) │
+│ - tokens     │     │              │     │              │     │              │
+│              │     │              │     │              │     │              │
+│ Writes:      │     │              │     │              │     │              │
+│ - Gherkin    │     │              │     │              │     │              │
+│ - mockup     │     │              │     │              │     │              │
+│ - journey    │     │              │     │              │     │              │
+│              │     │              │     │              │     │              │
+│ Then:        │     │              │     │              │     │              │
+│ - persona    │     │              │     │              │     │              │
+│   revision   │     │              │     │              │     │              │
+└──────┬───────┘     └──────────────┘     └──────┬───────┘     └──────┬───────┘
+       │                                         │                     │
+    [PAUSE]                                      ▼                     ▼
+  user approves                          ┌──────────────┐     ┌──────────────┐
+  then /tdd                              │ DRIFT CHECK  │     │ DRIFT CHECK  │
+                                         │ (layer 1)    │     │ (layer 1b)   │
+                                         └──────────────┘     └──────┬───────┘
+                                                                      │
+                                                                      ▼
+                                                               ┌──────────────┐
+                                                               │  COMPOUND    │
+                                                               │ (learnings)  │
+                                                               └──────────────┘
 ```
 
 ### What happens in the SPEC step:
@@ -128,7 +144,16 @@ All three are optional but improve every spec that follows. `/spec-first` will n
 4. **Add user journey** — Where this feature fits in the user's flow
 5. **Persona revision** — Re-read through persona's eyes, revise, note changes
 6. **Create component stubs** — For any new UI components
-7. **Pause** — Show spec + revision notes, wait for approval
+7. **Pause** — Show spec + revision notes, ask "Run `/tdd` when ready"
+
+### What happens in the /tdd step (Red-Green-Refactor):
+
+1. **RED** — Write failing tests from Gherkin scenarios
+2. **GREEN** — Implement until all tests pass
+3. **Drift Check L1** — Self-check spec vs code alignment
+4. **REFACTOR** — Clean up code, tests must still pass
+5. **Drift Check L1b** — Re-verify after refactoring
+6. **COMPOUND** — Extract learnings
 
 ---
 
@@ -264,6 +289,8 @@ Then [expected result]
 |---------|---------|-------------|
 | `/spec-init` | Bootstrap on existing codebase | First time on existing project |
 | `/spec-first` | Create or update spec + mockup (auto-detects) | Starting or updating any feature |
+| `/spec-first --full` | Spec + full Red-Green-Refactor cycle (no pauses) | Automated builds |
+| `/tdd` | Red-Green-Refactor cycle from approved spec | After reviewing a spec |
 | `/vision` | Create or update vision.md | Setting app direction |
 | `/personas` | Create or update user personas | Before first feature (or anytime) |
 | `/design-tokens` | Create or update design tokens | Before first feature (or anytime) |
@@ -333,9 +360,7 @@ If the user says any of these (or similar), create the spec and **STOP** - wait 
 - "wait"
 - "let me see"
 
-**After showing the spec:** "Does this look right? Ready to write tests?"
-
-**After tests are written:** "Tests written (failing). Ready to implement?"
+**After showing the spec:** "Does this look right? Run `/tdd` when ready, or say 'go ahead' to start the Red-Green-Refactor cycle."
 
 ---
 

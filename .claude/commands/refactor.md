@@ -1,5 +1,5 @@
 ---
-description: Refactor code while ensuring tests still pass
+description: Refactor code while ensuring tests still pass (manual or automated)
 ---
 
 Refactor: $ARGUMENTS
@@ -26,6 +26,16 @@ Refactor: $ARGUMENTS
 1. Run tests again (verify all pass)
 2. Update test docs ONLY if test names/organization changed
 3. Do NOT update feature specs (behavior didn't change)
+
+## Automated Mode (Build Loop / TDD)
+
+When called by build loop or `/tdd` as Phase 3 (post-GREEN):
+1. Read source files just implemented + test files
+2. Identify: long functions, duplication, poor names, complex conditionals, missing types, dead code
+3. Apply incremental refactoring, run tests after each change
+4. If tests fail, revert that change, move to next opportunity
+5. Commit: `refactor: clean up {feature name}`
+6. Output: `REFACTOR_COMPLETE: {summary}` or `REFACTOR_SKIPPED: code already clean`
 
 ## Safe Refactors
 

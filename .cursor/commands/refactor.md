@@ -6,7 +6,19 @@ Refactor code while ensuring tests still pass. Behavior should NOT change.
 
 **Tests define behavior.** If you need to change test assertions, that's NOT a refactor—it's a behavior change. Use the normal workflow instead.
 
-## Workflow
+## Modes
+
+### Interactive Mode (default — user runs `/refactor`)
+
+User specifies what to refactor. Follow the manual workflow below.
+
+### Automated Mode (build loop — no user input)
+
+Called by the build loop or `/tdd` after GREEN phase. The agent autonomously identifies and applies refactoring opportunities. No user prompts. See "Automated Refactor" section below.
+
+---
+
+## Manual Workflow
 
 ### Before Changing Anything
 1. Identify which tests cover the code being refactored
@@ -23,6 +35,40 @@ Refactor code while ensuring tests still pass. Behavior should NOT change.
 1. Run tests again to verify all pass
 2. Update test docs ONLY if test names/organization changed
 3. Do NOT update feature specs (behavior didn't change)
+
+---
+
+## Automated Refactor (Build Loop / TDD Integration)
+
+When called by the build loop or `/tdd` as Phase 3 (post-GREEN):
+
+1. Read the source files that were just implemented
+2. Read the test files to understand what's covered
+3. **Identify opportunities** — scan for:
+   - Functions longer than ~30 lines that could be extracted
+   - Duplicated code blocks
+   - Poor variable/function names
+   - Overly complex conditionals (nested if/else chains)
+   - Missing type annotations
+   - Dead code or unused imports
+   - Magic numbers/strings that should be constants
+4. **Apply refactoring** — make incremental changes
+5. **Run tests after each change** — they MUST still pass
+6. **If tests fail** — revert that specific change, move on to next opportunity
+7. **Do NOT change test assertions**
+8. **Do NOT update feature specs** (behavior didn't change)
+9. **Commit**: `refactor: clean up {feature name}`
+
+**Output signals** (for build loop):
+```
+REFACTOR_COMPLETE: {brief summary of changes}
+```
+Or if no refactoring was needed:
+```
+REFACTOR_SKIPPED: code already clean
+```
+
+---
 
 ## Safe Refactoring Examples
 
@@ -52,12 +98,14 @@ These indicate behavior changes, not refactoring.
 
 ## Example Usage
 
-User: "/refactor extract date formatting into a utility"
+### Manual
+```
+/refactor extract date formatting into a utility
+```
 
-I will:
-1. Find tests covering date formatting
-2. Extract the logic to a new utility function/module
-3. Update imports in original location
-4. Verify all tests still pass
-5. NOT change any test assertions
+### Automated (build loop prompt)
+```
+Refactor the source files for "user profile". Clean up the code —
+extract functions, simplify, improve naming. Tests MUST still pass.
+```
 

@@ -1,22 +1,28 @@
 # Spec-First Mode (TDD + Design Flow)
 
-Create or update the feature specification with Gherkin scenarios and ASCII mockups. This is step 1 of the TDD flow.
+Create or update the feature specification with Gherkin scenarios and ASCII mockups. This is step 1 of the Red-Green-Refactor TDD flow.
 
 ```
 Per feature:
-  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-  │    SPEC      │ ──▶ │    TEST      │ ──▶ │  IMPLEMENT   │
-  │ (Gherkin +   │     │  (failing)   │     │ (loop until  │
-  │  mockup +    │     │              │     │  tests pass) │
-  │  persona     │     │              │     │              │
-  │  revision)   │     │              │     │              │
-  └──────────────┘     └──────────────┘     └──────────────┘
-        │                                          │
-     [PAUSE]                                       ▼
-   user approves                           ┌──────────────┐
-                                           │  COMPOUND    │
-                                           │ (learnings)  │
-                                           └──────────────┘
+  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+  │    SPEC      │ ──▶ │  RED (test)  │ ──▶ │ GREEN (impl) │ ──▶ │  REFACTOR    │
+  │ (Gherkin +   │     │  (failing)   │     │ (until tests │     │ (clean up,   │
+  │  mockup +    │     │              │     │  pass)       │     │  tests must  │
+  │  persona     │     │              │     │              │     │  still pass) │
+  │  revision)   │     │              │     │              │     │              │
+  └──────�┬───────┘     └──────────────┘     └──────┬───────┘     └──────┬───────┘
+         │                                         │                     │
+      [PAUSE]                                      ▼                     ▼
+    user approves                           ┌──────────────┐     ┌──────────────┐
+    then /tdd                               │ DRIFT CHECK  │     │ DRIFT CHECK  │
+                                            │ (layer 1)    │     │ (layer 1b)   │
+                                            └──────────────┘     └──────┬───────┘
+                                                                        │
+                                                                        ▼
+                                                                 ┌──────────────┐
+                                                                 │  COMPOUND    │
+                                                                 │ (learnings)  │
+                                                                 └──────────────┘
 
 Reads from: .specs/personas/, .specs/design-system/
 Writes to: .specs/features/, .specs/design-system/components/ (stubs)
@@ -35,14 +41,17 @@ Check if the user included `--full` or `--auto` flag:
 
 ### Full Mode Behavior
 
-If `--full` or `--auto` flag is present, execute the ENTIRE TDD cycle without stopping:
+If `--full` or `--auto` flag is present, execute the ENTIRE Red-Green-Refactor TDD cycle without stopping:
 
 1. Create OR update spec (see Step 0)
-2. **Do NOT pause** - immediately write failing tests (or update tests if spec was updated)
-3. **Do NOT pause** - immediately implement until tests pass
-4. Update all frontmatter (status: implemented)
-5. Run `/compound` to extract learnings
-6. Commit with descriptive message
+2. **Do NOT pause** - immediately write failing tests (RED)
+3. **Do NOT pause** - immediately implement until tests pass (GREEN)
+4. Self-check drift (Layer 1) — compare spec to code, fix mismatches
+5. **REFACTOR** — clean up code, tests MUST still pass
+6. Post-refactor drift check (Layer 1b) — re-verify spec↔code after refactor
+7. Run `/compound` to extract learnings
+8. Update all frontmatter (status: implemented)
+9. Commit with descriptive message
 
 **Skip all "Ready to...?" prompts in full mode. Both create and update paths continue through the full loop.**
 
@@ -208,12 +217,12 @@ Show the spec summary plus persona revision notes:
 
 ---
 
-**Does this look right? Ready to write tests?**
+**Does this look right? Run `/tdd` when ready, or say "go ahead" to start the Red-Green-Refactor cycle.**
 ```
 
 **If Full Mode (--full flag present):**
 - Skip this pause
-- Immediately proceed to write tests
+- Immediately proceed to the TDD cycle (RED → GREEN → REFACTOR → COMPOUND)
 
 ---
 
@@ -338,31 +347,31 @@ Then [error handling behavior]
 
 ## Next Steps After Approval (or immediately in Full Mode)
 
-**Normal Mode**: When user says "go", "yes", "looks good", or approves
+**Normal Mode**: When user says "go ahead", "build it", runs `/tdd`, or approves — execute the full Red-Green-Refactor cycle
 **Full Mode**: Execute immediately without waiting for approval
 
-### Step 2: Write Failing Tests (or Update Tests)
+The steps below follow the `/tdd` command flow. See `.cursor/commands/tdd.md` for the standalone version.
+
+### Step 2: RED — Write Failing Tests
 1. Write tests that cover ALL Gherkin scenarios (create new or update existing)
-2. Tests should **FAIL** initially if no implementation yet (or fail if spec was updated and code doesn't match)
+2. Tests should **FAIL** initially if no implementation yet
 3. Document tests in `.specs/test-suites/{path}.tests.md`
 4. Update spec frontmatter: `status: tested`, add test files to `tests: []`
 5. Regenerate mapping: run `./scripts/generate-mapping.sh`
-6. **Normal Mode**: Ask: "Tests written (failing). Ready to implement?"
-7. **Full Mode**: Skip asking, proceed immediately to Step 3
+6. Proceed immediately to GREEN (no pause between RED and GREEN)
 
-### Step 3: Implement
-**Normal Mode**: When user approves implementation
-**Full Mode**: Execute immediately after tests
+### Step 3: GREEN — Implement Until Tests Pass
 1. Implement feature incrementally
 2. Use design tokens from `.specs/design-system/tokens.md`
 3. Follow component patterns from design system
 4. Run tests frequently
 5. Loop until all tests pass
 6. Update spec frontmatter: `status: implemented`, add components to `components: []`
+7. Do NOT update roadmap status — that happens after all verification passes
 
-### Step 4: Self-Check Drift (Full Mode: automatic, Normal Mode: optional)
+### Step 4: Drift Check — Layer 1 (Self-Check)
 
-Before documenting or extracting learnings, verify your implementation matches your spec:
+Verify your implementation matches your spec while you still have full context:
 
 1. Re-read the Gherkin scenarios you wrote in Step 1
 2. For each scenario, verify the code you just wrote implements it
@@ -374,28 +383,45 @@ Before documenting or extracting learnings, verify your implementation matches y
 - Or fix the code to match the spec (if you missed something)
 - Ensure tests still pass after any changes
 
-**Why this matters:** This is Layer 1 of drift enforcement — a quick self-check while you still have full context. The build loop will run a separate Layer 2 check with a fresh agent afterward, but catching obvious drift here is cheaper.
+### Step 5: REFACTOR — Clean Up Code
 
-### Step 5: Document Components
-After implementation:
+Now that tests pass and spec aligns, improve the code without changing behavior:
+
+1. Look for: extract functions, simplify conditionals, improve naming, remove duplication, add types
+2. Make incremental changes
+3. **Do NOT change test assertions** — if you need to, that's a behavior change
+4. Run tests after each change — they MUST still pass
+5. If tests fail, fix the refactor (don't change the tests)
+
+### Step 6: Drift Check — Layer 1b (Post-Refactor)
+
+Re-verify spec↔code alignment after refactoring:
+
+1. Re-read the Gherkin scenarios
+2. Verify the refactored code still implements every scenario
+3. Check that refactoring didn't subtly change behavior
+4. Fix any drift found, ensure tests pass
+
+### Step 7: Document Components
+After refactoring:
 1. Fill in component stubs with actual implementation details
 2. Update stub status from "📝 Stub" to "✅ Documented"
 3. Or use `/design-component {name}` to auto-document
 
-### Step 6: Compound Learnings
+### Step 8: Compound Learnings
 **Normal Mode**: Optional - user can run `/compound` at end of session
-**Full Mode**: Automatically run /compound after implementation
+**Full Mode**: Automatically run /compound after refactor
 
-1. Run `/compound` to extract learnings
+1. Run `/compound` to extract learnings from the final (refactored) code state
 2. Adds patterns/gotchas to spec's `## Learnings` section
 3. Cross-cutting patterns go to `.specs/learnings/{category}.md`
 
-### Step 7: Commit (Full Mode Only)
+### Step 9: Commit (Full Mode Only)
 
 **Full Mode only** - after /compound completes:
 1. Regenerate mapping: `./scripts/generate-mapping.sh`
 2. Stage all changes: `git add .specs/ src/ tests/`
-3. Commit with message: `feat: {feature name} (full TDD cycle)`
+3. Commit with message: `feat: {feature name} (TDD: red-green-refactor)`
 4. Report completion to user
 
 **REQUIRED output signals** (for build loop parsing):

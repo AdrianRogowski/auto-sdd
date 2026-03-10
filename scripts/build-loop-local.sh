@@ -62,11 +62,18 @@
 #     test          - Run test suite (shell cmd, uses TEST_CHECK_CMD)
 #     code-review   - Agent reviews code quality (fresh context)
 #   Note: drift check is controlled separately via DRIFT_CHECK.
+#   Note: refactor and compound are always-on phases (not optional steps).
 #   Default: "test"
 #   Examples:
 #     POST_BUILD_STEPS="test"                  # Just tests (default)
 #     POST_BUILD_STEPS="test,code-review"      # Tests + quality review
 #     POST_BUILD_STEPS=""                       # Skip all post-build steps
+#
+# REFACTOR: whether to run the refactor phase after build+test.
+#   Defaults to "true". Set to "false" to skip.
+#
+# COMPOUND: whether to run the compound (learnings) phase after drift check.
+#   Defaults to "true". Set to "false" to skip.
 #
 # CLI_PROVIDER: cursor (default) or claude. Use cursor for Cursor CLI (agent),
 #   claude for Claude Code CLI. Model names differ per provider.
@@ -78,16 +85,25 @@
 #
 #   AGENT_MODEL       - Default model for ALL agent steps (fallback)
 #   SPEC_MODEL        - Model for spec phase (/spec-first without --full)
-#   BUILD_MODEL       - Model for implement phase (tests, implement, compound, commit)
+#   BUILD_MODEL       - Model for implement phase (tests, implement, commit)
+#   REFACTOR_MODEL    - Model for refactor phase (clean up code, tests must pass)
 #   RETRY_MODEL       - Model for retry attempts (fixing build/test failures)
 #   DRIFT_MODEL       - Model for catch-drift agent
+#   COMPOUND_MODEL    - Model for compound/learnings agent
 #   REVIEW_MODEL      - Model for code-review agent
 #
 #   Examples:
 #     SPEC_MODEL="opus-4.6-thinking"              # Opus for spec (strong at planning)
 #     BUILD_MODEL="composer-1.5"                  # Cheaper model for implementation
+#     REFACTOR_MODEL="opus-4.6-thinking"          # Strong model for refactoring
 #     DRIFT_MODEL="gemini-3-flash"                # Cheap model for drift checks
+#     COMPOUND_MODEL="gemini-3-flash"             # Cheap model for learnings
 #     REVIEW_MODEL="sonnet-4.5-thinking"          # Thinking model for reviews
+#
+# RATE LIMIT HANDLING (for Claude Code / rate-limited providers):
+#   RATE_LIMIT_BACKOFF    - Initial wait in seconds when rate limited (default: 60)
+#   RATE_LIMIT_MAX_WAIT   - Max wait in seconds before giving up (default: 18000 = 5h)
+#   These only apply when a rate limit error is detected in agent output.
 
 set -e
 
@@ -125,15 +141,23 @@ BRANCH_STRATEGY="${BRANCH_STRATEGY:-chained}"
 DRIFT_CHECK="${DRIFT_CHECK:-true}"
 MAX_DRIFT_RETRIES="${MAX_DRIFT_RETRIES:-2}"
 POST_BUILD_STEPS="${POST_BUILD_STEPS:-test}"
+REFACTOR="${REFACTOR:-true}"
+COMPOUND="${COMPOUND:-true}"
 
 # Model selection (per-step overrides with AGENT_MODEL fallback)
 # Cursor CLI default; run `agent --list-models` to see available models
 AGENT_MODEL="${AGENT_MODEL:-composer-1.5}"
 SPEC_MODEL="${SPEC_MODEL:-}"
 BUILD_MODEL="${BUILD_MODEL:-}"
+REFACTOR_MODEL="${REFACTOR_MODEL:-}"
 RETRY_MODEL="${RETRY_MODEL:-}"
 DRIFT_MODEL="${DRIFT_MODEL:-}"
+COMPOUND_MODEL="${COMPOUND_MODEL:-}"
 REVIEW_MODEL="${REVIEW_MODEL:-}"
+
+# Rate limit handling
+RATE_LIMIT_BACKOFF="${RATE_LIMIT_BACKOFF:-60}"
+RATE_LIMIT_MAX_WAIT="${RATE_LIMIT_MAX_WAIT:-18000}"
 
 log() { echo "[$(date '+%H:%M:%S')] $1"; }
 success() { echo "[$(date '+%H:%M:%S')] ✓ $1"; }
@@ -247,20 +271,48 @@ run_agent() {
     local step_model="$1"
     local prompt="$2"
     local model="${step_model:-$AGENT_MODEL}"
+    local backoff="$RATE_LIMIT_BACKOFF"
+    local total_waited=0
 
-    if [ "$CLI_PROVIDER" = "claude" ]; then
-        if [ -n "$model" ]; then
-            claude -p "$prompt" --output-format text --allowedTools Read,Edit,Bash,Grep,Glob --model "$model"
+    while true; do
+        local agent_output
+        agent_output=$(mktemp)
+        local exit_code=0
+
+        if [ "$CLI_PROVIDER" = "claude" ]; then
+            if [ -n "$model" ]; then
+                claude -p "$prompt" --output-format text --allowedTools Read,Edit,Bash,Grep,Glob --model "$model" 2>&1 | tee "$agent_output" || exit_code=$?
+            else
+                claude -p "$prompt" --output-format text --allowedTools Read,Edit,Bash,Grep,Glob 2>&1 | tee "$agent_output" || exit_code=$?
+            fi
         else
-            claude -p "$prompt" --output-format text --allowedTools Read,Edit,Bash,Grep,Glob
+            if [ -n "$model" ]; then
+                agent -p --force --output-format text --model "$model" "$prompt" 2>&1 | tee "$agent_output" || exit_code=$?
+            else
+                agent -p --force --output-format text "$prompt" 2>&1 | tee "$agent_output" || exit_code=$?
+            fi
         fi
-    else
-        if [ -n "$model" ]; then
-            agent -p --force --output-format text --model "$model" "$prompt"
-        else
-            agent -p --force --output-format text "$prompt"
+
+        local output_text
+        output_text=$(cat "$agent_output")
+        rm -f "$agent_output"
+
+        if echo "$output_text" | grep -qi "rate.limit\|overloaded\|429\|too many requests\|capacity"; then
+            if [ "$total_waited" -ge "$RATE_LIMIT_MAX_WAIT" ]; then
+                warn "Rate limited and max wait ($RATE_LIMIT_MAX_WAIT s) exceeded. Giving up."
+                echo "$output_text"
+                return 1
+            fi
+            warn "Rate limited. Waiting ${backoff}s before retry... (total waited: ${total_waited}s)"
+            sleep "$backoff"
+            total_waited=$((total_waited + backoff))
+            backoff=$((backoff * 2))
+            [ "$backoff" -gt "$RATE_LIMIT_MAX_WAIT" ] && backoff=$RATE_LIMIT_MAX_WAIT
+            continue
         fi
-    fi
+
+        return $exit_code
+    done
 }
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -617,15 +669,16 @@ implement_prompt() {
     local feature_name="$1"
     local spec_file="$2"
     echo "
-The spec for \"$feature_name\" exists at $spec_file. Implement it through the full TDD cycle:
+The spec for \"$feature_name\" exists at $spec_file. Implement it through RED → GREEN:
 
 1. Read the spec file and all its Gherkin scenarios
-2. Write failing tests covering ALL scenarios
-3. Implement until all tests pass
-4. Run /compound to extract learnings
+2. Write failing tests covering ALL scenarios (RED)
+3. Implement until all tests pass (GREEN)
+4. Self-check drift: re-read spec, compare to code, fix obvious mismatches (Layer 1)
 5. Regenerate mapping: run ./scripts/generate-mapping.sh
-6. Update roadmap to mark the feature ✅ completed
-7. Commit all changes with a descriptive message
+6. Commit all changes with message: feat: $feature_name
+
+IMPORTANT: Do NOT update the roadmap status. Do NOT run /compound. Those happen in later phases after verification.
 
 CRITICAL IMPLEMENTATION RULES (from roadmap):
 - NO mock data, fake JSON, or placeholder content. All features use real DB queries and real API calls.
@@ -643,7 +696,7 @@ Or if build fails:
 BUILD_FAILED: {reason}
 
 The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported.
-They are used by the automated drift-check that runs after your build.
+They are used by the automated refactor, drift-check, and compound phases that run after your build.
 "
 }
 
@@ -655,10 +708,11 @@ Your job:
 2. Look at .specs/roadmap.md to find the feature marked 🔄 in progress
 3. If the spec is missing or incomplete: run /spec-first {feature} (without --full) to create/update it
 4. If the spec exists: fix the implementation — type errors, missing imports, incomplete code, failing tests
-5. Complete the full TDD cycle: tests, implement until pass, /compound, commit
+5. Complete RED → GREEN: tests, implement until pass, commit
 6. Make sure the feature works end-to-end with REAL data (no mocks, no fake endpoints)
 7. Run the test suite to verify everything passes: '"$TEST_CMD"'
-8. Update roadmap to mark the feature ✅ completed
+
+IMPORTANT: Do NOT update the roadmap status. Do NOT run /compound. Those happen in later phases after verification.
 
 CRITICAL: Do NOT use mock data, fake JSON, or placeholder content. All features must use real DB queries and real API calls.
 '
@@ -688,6 +742,99 @@ Or if build fails:
 BUILD_FAILED: {reason}
 "
     echo "$prompt"
+}
+
+# Phase 3: Refactor (REFACTOR_MODEL). Called after build+test pass.
+refactor_prompt() {
+    local feature_name="$1"
+    local spec_file="$2"
+    local source_files="$3"
+    local test_cmd_hint=""
+    if [ -n "$TEST_CMD" ]; then
+        test_cmd_hint="
+Run the test suite after each change to verify: $TEST_CMD"
+    fi
+    echo "
+You are the REFACTOR agent. The feature \"$feature_name\" has been implemented and all tests pass.
+Your job: clean up the code WITHOUT changing behavior. Tests must still pass after every change.
+
+Spec file: $spec_file
+Source files: $source_files$test_cmd_hint
+
+Instructions:
+1. Read the source files listed above
+2. Identify refactoring opportunities:
+   - Functions longer than ~30 lines → extract
+   - Duplicated code blocks → consolidate
+   - Poor variable/function names → rename
+   - Overly complex conditionals → simplify
+   - Missing type annotations → add
+   - Dead code or unused imports → remove
+   - Magic numbers/strings → extract to constants
+3. Apply refactoring incrementally
+4. Run tests after each change — they MUST still pass
+5. If tests fail after a change, REVERT that change and move on
+6. Do NOT change test assertions (if you need to, it's a behavior change)
+7. Do NOT update the roadmap or feature spec (behavior didn't change)
+8. Commit: refactor: clean up $feature_name
+
+After completion, output EXACTLY ONE of:
+REFACTOR_COMPLETE: {brief summary of changes made}
+REFACTOR_SKIPPED: code already clean
+"
+}
+
+# Phase 5: Compound (COMPOUND_MODEL). Called after drift check.
+compound_prompt() {
+    local feature_name="$1"
+    local spec_file="$2"
+    local source_files="$3"
+    echo "
+You are the COMPOUND agent. The feature \"$feature_name\" has been built, refactored, and drift-checked.
+Your job: extract learnings from this implementation session.
+
+Spec file: $spec_file
+Source files: $source_files
+
+Instructions:
+1. Read the spec file and source files
+2. Identify learnings:
+   - Feature-specific patterns → add to the spec file's ## Learnings section
+   - Cross-cutting patterns → add to .specs/learnings/{category}.md (testing, performance, security, api, design, general)
+   - Add a brief entry to .specs/learnings/index.md
+3. Update the spec's frontmatter: set updated: $(date '+%Y-%m-%d')
+4. Commit: compound: learnings from $feature_name
+
+After completion, output:
+COMPOUND_COMPLETE: {brief summary of learnings captured}
+"
+}
+
+# ── Roadmap status helper ────────────────────────────────────────────────
+# Updates the roadmap status for a feature at the SCRIPT level (not agent).
+# This ensures roadmap is only marked ✅ after ALL verification passes.
+mark_roadmap_status() {
+    local feature_name="$1"
+    local status_emoji="$2"
+    local roadmap_file="$PROJECT_DIR/.specs/roadmap.md"
+
+    if [ ! -f "$roadmap_file" ]; then
+        warn "No roadmap.md found — skipping status update"
+        return 0
+    fi
+
+    local escaped_name
+    escaped_name=$(echo "$feature_name" | sed 's/[.[\*^$()+?{|\\]/\\&/g')
+
+    if grep -q "$escaped_name" "$roadmap_file" 2>/dev/null; then
+        # Replace status emoji on the line containing this feature name
+        # Handles: ⬜ 🔄 ✅ ⏸️ ❌
+        sed -i.bak -E "/$escaped_name/s/⬜|🔄|✅|⏸️|❌/$status_emoji/g" "$roadmap_file"
+        rm -f "$roadmap_file.bak"
+        log "Roadmap: $feature_name → $status_emoji"
+    else
+        warn "Feature '$feature_name' not found in roadmap — skipping status update"
+    fi
 }
 
 # ── Build loop function ──────────────────────────────────────────────────
@@ -799,49 +946,86 @@ run_build_loop() {
             if echo "$BUILD_RESULT" | grep -q "FEATURE_BUILT"; then
                 local feature_name
                 feature_name=$(echo "$BUILD_RESULT" | grep "FEATURE_BUILT" | tail -1 | cut -d: -f2- | xargs)
+                local phase_ok=true
 
-                # Verify: did it actually commit?
-                if check_working_tree_clean; then
-                    # Verify: does it actually build?
-                    if check_build; then
-                        # Verify: do tests pass?
-                        if ! should_run_step "test" || check_tests; then
-                            # Verify: spec and code are aligned (fresh agent)
-                            extract_drift_targets "$BUILD_RESULT"
-                            if check_drift "$DRIFT_SPEC_FILE" "$DRIFT_SOURCE_FILES"; then
-                                # Optional: code review (fresh agent)
-                                if should_run_step "code-review"; then
-                                    run_code_review || warn "Code review had issues (non-blocking)"
-                                    # Re-validate after review changes
-                                    if ! check_build; then
-                                        warn "Code review broke the build!"
-                                    elif should_run_step "test" && [ -n "$TEST_CMD" ] && ! check_tests; then
-                                        warn "Code review broke tests!"
-                                    fi
-                                fi
+                # ── Post-build verification (Phase 2 output) ──
+                if ! check_working_tree_clean; then
+                    warn "Agent said FEATURE_BUILT but left uncommitted changes"
+                    phase_ok=false
+                elif ! check_build; then
+                    warn "Agent said FEATURE_BUILT but build check failed"
+                    phase_ok=false
+                elif should_run_step "test" && ! check_tests; then
+                    warn "Agent said FEATURE_BUILT but tests failed"
+                    phase_ok=false
+                fi
 
-                                LOOP_BUILT=$((LOOP_BUILT + 1))
-                                local feature_end=$(date +%s)
-                                local feature_duration=$((feature_end - FEATURE_START))
-                                success "Feature $LOOP_BUILT built: $feature_name ($(format_duration $feature_duration))"
-                                LOOP_TIMINGS+=("✓ $feature_name: $(format_duration $feature_duration)")
-                                feature_done=true
+                if [ "$phase_ok" = true ]; then
+                    extract_drift_targets "$BUILD_RESULT"
 
-                                # Track feature name for 'both' mode
-                                BUILT_FEATURE_NAMES+=("$feature_name")
+                    # ── Phase 3: Refactor (REFACTOR_MODEL) ──
+                    if [ "$REFACTOR" = "true" ]; then
+                        log "Phase 3: Refactor (model: ${REFACTOR_MODEL:-${AGENT_MODEL:-default}}) — $feature_name"
+                        local pre_refactor_commit
+                        pre_refactor_commit=$(git rev-parse HEAD)
 
-                                break
-                            else
-                                warn "Agent said FEATURE_BUILT but drift check failed"
-                            fi
+                        REFACTOR_OUTPUT=$(mktemp)
+                        run_agent "$REFACTOR_MODEL" "$(refactor_prompt "$feature_name" "$DRIFT_SPEC_FILE" "$DRIFT_SOURCE_FILES")" 2>&1 | tee "$REFACTOR_OUTPUT" || true
+                        rm -f "$REFACTOR_OUTPUT"
+
+                        # Verify refactor didn't break anything
+                        if ! check_build || (should_run_step "test" && [ -n "$TEST_CMD" ] && ! check_tests); then
+                            warn "Refactor broke build/tests — reverting to pre-refactor state"
+                            git reset --hard "$pre_refactor_commit"
+                            success "Reverted to pre-refactor commit"
                         else
-                            warn "Agent said FEATURE_BUILT but tests failed"
+                            success "Refactor complete — build and tests still pass"
                         fi
                     else
-                        warn "Agent said FEATURE_BUILT but build check failed"
+                        log "Refactor disabled (set REFACTOR=true to enable)"
                     fi
-                else
-                    warn "Agent said FEATURE_BUILT but left uncommitted changes"
+
+                    # ── Phase 4: Drift check (DRIFT_MODEL — fresh agent) ──
+                    if check_drift "$DRIFT_SPEC_FILE" "$DRIFT_SOURCE_FILES"; then
+
+                        # ── Phase 5: Compound (COMPOUND_MODEL) ──
+                        if [ "$COMPOUND" = "true" ]; then
+                            log "Phase 5: Compound (model: ${COMPOUND_MODEL:-${AGENT_MODEL:-default}}) — $feature_name"
+                            COMPOUND_OUTPUT=$(mktemp)
+                            run_agent "$COMPOUND_MODEL" "$(compound_prompt "$feature_name" "$DRIFT_SPEC_FILE" "$DRIFT_SOURCE_FILES")" 2>&1 | tee "$COMPOUND_OUTPUT" || true
+                            rm -f "$COMPOUND_OUTPUT"
+                            success "Compound (learnings) complete"
+                        else
+                            log "Compound disabled (set COMPOUND=true to enable)"
+                        fi
+
+                        # ── Optional: code review (fresh agent) ──
+                        if should_run_step "code-review"; then
+                            run_code_review || warn "Code review had issues (non-blocking)"
+                            if ! check_build; then
+                                warn "Code review broke the build!"
+                            elif should_run_step "test" && [ -n "$TEST_CMD" ] && ! check_tests; then
+                                warn "Code review broke tests!"
+                            fi
+                        fi
+
+                        # ── Mark roadmap ✅ at script level (after ALL verification) ──
+                        mark_roadmap_status "$feature_name" "✅"
+                        git add -A && git commit -m "chore: mark $feature_name complete in roadmap" --allow-empty 2>/dev/null || true
+
+                        LOOP_BUILT=$((LOOP_BUILT + 1))
+                        local feature_end=$(date +%s)
+                        local feature_duration=$((feature_end - FEATURE_START))
+                        success "Feature $LOOP_BUILT built: $feature_name ($(format_duration $feature_duration))"
+                        LOOP_TIMINGS+=("✓ $feature_name: $(format_duration $feature_duration)")
+                        feature_done=true
+
+                        BUILT_FEATURE_NAMES+=("$feature_name")
+
+                        break
+                    else
+                        warn "Agent said FEATURE_BUILT but drift check failed"
+                    fi
                 fi
             fi
 

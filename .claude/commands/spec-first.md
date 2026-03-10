@@ -11,7 +11,7 @@ Check if `--full` or `--auto` flag is present in the arguments:
 | Mode | Behavior |
 |------|----------|
 | Normal (default) | Stop for approval at each step |
-| Full (`--full` or `--auto`) | Complete TDD cycle without pauses (create OR update, then tests → implement → compound → commit) |
+| Full (`--full` or `--auto`) | Complete Red-Green-Refactor TDD cycle without pauses (create OR update, then RED → GREEN → drift check → REFACTOR → drift check → compound → commit) |
 
 ## Instructions
 
@@ -77,37 +77,47 @@ After drafting, re-read through persona eyes and revise:
 5. **Track what you changed** for the report.
 
 ### 7. Pause Point
-- **Normal Mode**: STOP — show spec summary plus persona revision notes (what you changed and why). Ask "Does this look right? Ready to write tests?"
-- **Full Mode**: Skip pause, immediately proceed to tests
+- **Normal Mode**: STOP — show spec summary plus persona revision notes (what you changed and why). Ask "Does this look right? Run `/tdd` when ready, or say 'go ahead' to start the Red-Green-Refactor cycle."
+- **Full Mode**: Skip pause, immediately proceed to the TDD cycle
 
 ## After Approval (or immediately in Full Mode)
 
-**Both create and update paths continue through the full loop in Full mode.**
+**Both create and update paths continue through the full Red-Green-Refactor loop.** The steps below follow the `/tdd` command flow.
 
-**Step 2: Write Tests**
+**Step 2: RED — Write Failing Tests**
 1. Write failing tests covering all scenarios
 2. Update frontmatter: `status: tested`, add test files to `tests: []`
-3. **Normal Mode**: Ask "Tests written (failing). Ready to implement?"
-4. **Full Mode**: Skip pause, immediately implement
+3. Proceed immediately to GREEN (no pause between RED and GREEN)
 
-**Step 3: Implement**
+**Step 3: GREEN — Implement Until Tests Pass**
 1. Implement until tests pass using design tokens
 2. Update frontmatter: `status: implemented`, add components to `components: []`
+3. Do NOT update roadmap status — that happens after all verification passes
 
-**Step 4: Self-Check Drift (Full Mode: automatic, Normal Mode: optional)**
+**Step 4: Drift Check — Layer 1 (Self-Check)**
 1. Re-read your Gherkin scenarios
 2. Verify each scenario is implemented in the code you wrote
 3. Check for behaviors in code not in spec (or vice versa)
-4. Fix any drift: update spec to match code, or fix code to match spec
-5. Ensure tests still pass
+4. Fix any drift, ensure tests still pass
 
-**Step 5: Compound (Full Mode runs automatically)**
-1. Run `/compound` to extract learnings
+**Step 5: REFACTOR — Clean Up Code**
+1. Extract functions, simplify, improve naming, remove duplication
+2. Do NOT change test assertions
+3. Tests MUST still pass after each change
+4. If tests fail, fix the refactor (don't change tests)
+
+**Step 6: Drift Check — Layer 1b (Post-Refactor)**
+1. Re-verify spec↔code alignment after refactoring
+2. Check that refactoring didn't subtly change behavior
+3. Fix any drift, ensure tests pass
+
+**Step 7: Compound (Full Mode runs automatically)**
+1. Run `/compound` to extract learnings from the final (refactored) code
 2. Update `.specs/learnings/{category}.md`
 
-**Step 6: Commit (Full Mode only)**
+**Step 8: Commit (Full Mode only)**
 1. Regenerate mapping: `./scripts/generate-mapping.sh`
-2. Commit all changes: `feat: {feature name} (full TDD cycle)`
+2. Commit all changes: `feat: {feature name} (TDD: red-green-refactor)`
 3. Output these signals (REQUIRED for build loop):
    ```
    FEATURE_BUILT: {feature name}
