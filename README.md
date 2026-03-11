@@ -265,32 +265,39 @@ Every feature build goes through a multi-stage pipeline. Each agent-based step r
 **Automated** (scripts): Uses a **5-phase** flow — each phase gets a fresh context window and can use a different model.
 
 ```
-┌─────────┐  ┌─────────┐  ┌────────┐  ┌────────┐  ┌──────────┐  ┌────────┐  ┌─────────┐  ┌──────────┐  ┌─────────┐
-│ Phase 1 │─▶│ Phase 2 │─▶│ build  │─▶│  test  │─▶│ Phase 3  │─▶│ build  │─▶│ Phase 4 │─▶│ Phase 5  │─▶│ roadmap │
-│ SPEC    │  │ BUILD   │  │ check  │  │ suite  │  │ REFACTOR │  │+test   │  │ DRIFT   │  │ COMPOUND │  │   ✅    │
-│ (agent) │  │ (agent) │  │(shell) │  │(shell) │  │ (agent)  │  │(shell) │  │ (agent) │  │ (agent)  │  │(script) │
-└─────────┘  └─────────┘  └────────┘  └────────┘  └──────────┘  └────────┘  └─────────┘  └──────────┘  └─────────┘
-     │             │            │           │           │              │           │             │
-     └── retry ◄───┴── retry ◄──┴── retry ◄─┘           │              │           │             │
-                                                  reverts if broken ◄──┘           │             │
-                                                                                   ▼             ▼
-                                                                              build+tests    non-fatal
-                                                                              re-run
+┌─────────┐  ┌─────────┐  ┌────────┐  ┌─────────┐  ┌────────┐  ┌──────┐  ┌──────────┐  ┌────────┐  ┌─────────┐  ┌──────┐  ┌──────────┐  ┌─────────┐
+│ Phase 1 │─▶│ Phase 2 │─▶│ build  │─▶│ migrate │─▶│  test  │─▶│ lint │─▶│ Phase 3  │─▶│ build  │─▶│ Phase 4 │─▶│ e2e  │─▶│ Phase 5  │─▶│ roadmap │
+│ SPEC    │  │ BUILD   │  │ check  │  │ (if     │  │ suite  │  │      │  │ REFACTOR │  │+test   │  │ DRIFT   │  │      │  │ COMPOUND │  │   ✅    │
+│ (agent) │  │ (agent) │  │(shell) │  │ schema) │  │(shell) │  │      │  │ (agent)  │  │(shell) │  │ (agent) │  │      │  │ (agent)  │  │(script) │
+└─────────┘  └─────────┘  └────────┘  └─────────┘  └────────┘  └──────┘  └──────────┘  └────────┘  └─────────┘  └──────┘  └──────────┘  └─────────┘
+     │             │            │                        │                      │              │           │                     │
+     └── retry ◄───┴── retry ◄──┴──────── retry ◄───────┘                reverts if broken ◄──┘           │                     │
+                                                                                                          ▼                     ▼
+                                                                                                     build+tests           non-fatal
+                                                                                                     re-run
 ```
 
 | Phase | Type | Model | Controls | Blocking? | Safety net |
 |-------|------|-------|----------|-----------|------------|
 | 1. Spec | Agent | `SPEC_MODEL` | — | Yes (retry) | — |
 | 2. Build (RED→GREEN) | Agent | `BUILD_MODEL` | — | Yes (retry) | — |
-| Post-build check | Shell | — | `BUILD_CHECK_CMD`, `TEST_CHECK_CMD` | Yes (retry) | — |
+| Build check | Shell | — | `BUILD_CHECK_CMD` | Yes (retry) | — |
+| Migration | Shell | — | `MIGRATION_CMD` | No (warn) | Only runs when schema files change |
+| Test check | Shell | — | `TEST_CHECK_CMD` | Yes (retry) | — |
+| Lint check | Shell | — | `LINT_CHECK_CMD` | No (warn) | — |
 | 3. Refactor | Agent | `REFACTOR_MODEL` | `REFACTOR=true` | No (auto-reverts) | Reverts to pre-refactor if build/tests break |
 | Post-refactor check | Shell | — | `BUILD_CHECK_CMD`, `TEST_CHECK_CMD` | — | Triggers revert |
 | 4. Drift check | Agent | `DRIFT_MODEL` | `DRIFT_CHECK=true` | Yes (retry) | build + tests after fix |
+| E2E check | Shell | — | `E2E_CHECK_CMD` | No (warn) | Runs after drift (final code) |
 | 5. Compound | Agent | `COMPOUND_MODEL` | `COMPOUND=true` | No (non-fatal) | — |
 | Code review | Agent | `REVIEW_MODEL` | `POST_BUILD_STEPS` | No (warn only) | build + tests after fix |
 | Roadmap ✅ | Script | — | — | — | Only marks complete after ALL phases pass |
 
 **Data flow**: Spec phase outputs `FEATURE_SPEC_READY` + `SPEC_FILE` → build phase. Build phase outputs `FEATURE_BUILT` + `SOURCE_FILES` → refactor, drift, and compound phases. Build/test failures feed `LAST_BUILD_OUTPUT` and `LAST_TEST_OUTPUT` into the retry agent.
+
+**Lazy re-detection**: All check commands (`BUILD_CHECK_CMD`, `TEST_CHECK_CMD`, `LINT_CHECK_CMD`, `MIGRATION_CMD`, `E2E_CHECK_CMD`) are auto-detected from project files. If empty at startup (e.g., greenfield project where Feature 1 creates the infrastructure), they are **re-detected after each feature** and persisted back to `.env.local`. This means Feature 1 can create `package.json`, `tsconfig.json`, and `drizzle.config.ts`, and the script will automatically pick up `npx tsc --noEmit`, `npm test`, `npm run lint`, and `npm run db:push` for Features 2+.
+
+**Infrastructure hint**: For early features (first 2), the build prompt includes a reminder to update `.env.local` with correct verification commands if the feature creates project infrastructure.
 
 **Roadmap status**: The spec agent marks the feature 🔄 (in progress). The **script** (not any agent) marks it ✅ only after all phases pass. This prevents features being marked complete when post-build verification fails.
 
@@ -542,9 +549,12 @@ CREATE_JIRA_FOR_SLACK=true    # Create Jira tickets for Slack requests
 SYNC_JIRA_STATUS=true         # Keep Jira status in sync
 MAX_FEATURES=4                # Features per overnight run
 
-# Build validation
-BUILD_CHECK_CMD=""            # Auto-detected (tsc, cargo check, etc.)
-TEST_CHECK_CMD=""             # Auto-detected (npm test, pytest, etc.)
+# Build validation (all auto-detected if empty, re-detected after each feature)
+BUILD_CHECK_CMD=""            # Auto-detected (tsc, cargo check, go build, etc.)
+TEST_CHECK_CMD=""             # Auto-detected (npm test, pytest, cargo test, etc.)
+LINT_CHECK_CMD=""             # Auto-detected (npm run lint, ruff check, etc.) — non-blocking
+MIGRATION_CMD=""              # Auto-detected (drizzle-kit push, prisma db push, etc.) — non-blocking
+E2E_CHECK_CMD=""              # Auto-detected (playwright, cypress) — non-blocking
 POST_BUILD_STEPS="test"       # Comma-separated: test, code-review
 DRIFT_CHECK=true              # Spec↔code drift detection (Phase 4)
 REFACTOR=true                 # Refactor phase after tests pass (Phase 3)

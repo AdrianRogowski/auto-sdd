@@ -56,6 +56,43 @@
 #     TEST_CHECK_CMD="cargo test"
 #     TEST_CHECK_CMD="skip"
 #
+# LINT_CHECK_CMD: command to run lint checks after each feature.
+#   Defaults to auto-detection (npm run lint, ruff check, cargo clippy, etc.)
+#   Lint failures are non-blocking (warns but doesn't retry).
+#   Set to "skip" to disable lint checking.
+#   Examples:
+#     LINT_CHECK_CMD="npm run lint"
+#     LINT_CHECK_CMD="pnpm lint"
+#     LINT_CHECK_CMD="ruff check ."
+#     LINT_CHECK_CMD="skip"
+#
+# MIGRATION_CMD: command to apply database migrations after schema changes.
+#   Defaults to auto-detection (drizzle-kit push, prisma db push, alembic upgrade, etc.)
+#   Only runs when schema files change (detected via git diff).
+#   Migration failures are non-blocking (warns — database may not be available).
+#   Set to "skip" to disable migration.
+#   Examples:
+#     MIGRATION_CMD="npm run db:push"
+#     MIGRATION_CMD="npx drizzle-kit push"
+#     MIGRATION_CMD="npx prisma db push"
+#     MIGRATION_CMD="alembic upgrade head"
+#     MIGRATION_CMD="skip"
+#
+# E2E_CHECK_CMD: command to run end-to-end tests after each feature.
+#   Defaults to auto-detection (playwright, cypress).
+#   Runs after drift check (most expensive, needs final code).
+#   E2E failures are non-blocking (warns but doesn't retry).
+#   Set to "skip" to disable e2e testing.
+#   Examples:
+#     E2E_CHECK_CMD="npx playwright test"
+#     E2E_CHECK_CMD="npx cypress run"
+#     E2E_CHECK_CMD="skip"
+#
+# LAZY RE-DETECTION: All check commands are re-detected after each feature
+#   if they are empty. This handles greenfield projects where Feature 1 creates
+#   the project infrastructure (package.json, tsconfig, etc.) that didn't exist
+#   at script startup. Newly detected commands are persisted back to .env.local.
+#
 # POST_BUILD_STEPS: comma-separated list of extra steps after build+drift.
 #   Each agent-based step runs in a FRESH context window.
 #   Available steps:
@@ -163,6 +200,7 @@ log() { echo "[$(date '+%H:%M:%S')] $1"; }
 success() { echo "[$(date '+%H:%M:%S')] ✓ $1"; }
 warn() { echo "[$(date '+%H:%M:%S')] ⚠ $1"; }
 fail() { echo "[$(date '+%H:%M:%S')] ✗ $1"; }
+trim() { sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
 
 format_duration() {
     local total_seconds=$1
@@ -265,6 +303,68 @@ detect_test_check() {
 
 TEST_CMD=$(detect_test_check)
 
+# ── Auto-detect lint check command ──────────────────────────────────────────
+
+detect_lint_check() {
+    if [ -n "$LINT_CHECK_CMD" ]; then
+        if [ "$LINT_CHECK_CMD" = "skip" ]; then echo ""; else echo "$LINT_CHECK_CMD"; fi
+        return
+    fi
+    if [ -f "package.json" ] && grep -q '"lint"' package.json 2>/dev/null; then
+        echo "npm run lint"; return
+    fi
+    if command -v ruff &>/dev/null && { [ -f "pyproject.toml" ] || [ -f "ruff.toml" ]; }; then
+        echo "ruff check ."; return
+    fi
+    if [ -f "Cargo.toml" ]; then echo "cargo clippy -- -D warnings 2>/dev/null || true"; return; fi
+    echo ""
+}
+
+LINT_CMD=$(detect_lint_check)
+
+# ── Auto-detect migration command ───────────────────────────────────────────
+
+detect_migration_cmd() {
+    if [ -n "$MIGRATION_CMD" ]; then
+        if [ "$MIGRATION_CMD" = "skip" ]; then echo ""; else echo "$MIGRATION_CMD"; fi
+        return
+    fi
+    # Drizzle
+    if [ -f "drizzle.config.ts" ] || [ -f "drizzle.config.js" ]; then
+        if [ -f "package.json" ] && grep -q '"db:push"' package.json 2>/dev/null; then
+            echo "npm run db:push"; return
+        fi
+        echo "npx drizzle-kit push"; return
+    fi
+    # Prisma
+    if [ -f "prisma/schema.prisma" ]; then echo "npx prisma db push"; return; fi
+    # Alembic (Python)
+    if [ -f "alembic.ini" ] || [ -d "alembic" ]; then echo "alembic upgrade head"; return; fi
+    # Django
+    if [ -f "manage.py" ] && grep -q "django" "requirements.txt" 2>/dev/null; then echo "python manage.py migrate"; return; fi
+    echo ""
+}
+
+DB_MIGRATION_CMD=$(detect_migration_cmd)
+
+# ── Auto-detect e2e check command ───────────────────────────────────────────
+
+detect_e2e_check() {
+    if [ -n "$E2E_CHECK_CMD" ]; then
+        if [ "$E2E_CHECK_CMD" = "skip" ]; then echo ""; else echo "$E2E_CHECK_CMD"; fi
+        return
+    fi
+    if [ -f "playwright.config.ts" ] || [ -f "playwright.config.js" ]; then
+        echo "npx playwright test"; return
+    fi
+    if [ -f "cypress.config.ts" ] || [ -f "cypress.config.js" ]; then
+        echo "npx cypress run"; return
+    fi
+    echo ""
+}
+
+E2E_CMD=$(detect_e2e_check)
+
 # ── Agent runner (supports Cursor CLI and Claude Code) ─────────────────────
 
 run_agent() {
@@ -333,6 +433,9 @@ clean_working_tree() {
 
 LAST_BUILD_OUTPUT=""
 LAST_TEST_OUTPUT=""
+LAST_LINT_OUTPUT=""
+LAST_MIGRATION_OUTPUT=""
+LAST_E2E_OUTPUT=""
 FEATURE_SESSION_NOTES=""
 LAST_DRIFT_SUMMARY=""
 
@@ -378,6 +481,142 @@ check_tests() {
     return $exit_code
 }
 
+check_lint() {
+    if [ -z "$LINT_CMD" ]; then
+        return 0
+    fi
+    log "Running lint check: $LINT_CMD"
+    local tmpfile
+    tmpfile=$(mktemp)
+    eval "$LINT_CMD" 2>&1 | tee "$tmpfile"
+    local exit_code=${PIPESTATUS[0]}
+    if [ $exit_code -eq 0 ]; then
+        success "Lint check passed"
+        LAST_LINT_OUTPUT=""
+    else
+        LAST_LINT_OUTPUT=$(tail -50 "$tmpfile")
+        warn "Lint check failed (non-blocking)"
+    fi
+    rm -f "$tmpfile"
+    return $exit_code
+}
+
+check_migration() {
+    if [ -z "$DB_MIGRATION_CMD" ]; then
+        return 0
+    fi
+
+    # Only run if schema files changed in recent commits
+    local schema_changed
+    schema_changed=$(git diff HEAD~1 --name-only 2>/dev/null | grep -E 'schema/|migrations?/|prisma/|alembic/' | head -1 || echo "")
+    if [ -z "$schema_changed" ]; then
+        log "No schema changes — skipping migration"
+        return 0
+    fi
+
+    log "Schema files changed — running migration: $DB_MIGRATION_CMD"
+    local tmpfile
+    tmpfile=$(mktemp)
+    eval "$DB_MIGRATION_CMD" 2>&1 | tee "$tmpfile"
+    local exit_code=${PIPESTATUS[0]}
+    if [ $exit_code -eq 0 ]; then
+        success "Migration applied"
+        LAST_MIGRATION_OUTPUT=""
+    else
+        LAST_MIGRATION_OUTPUT=$(tail -50 "$tmpfile")
+        warn "Migration failed (non-blocking — database may not be available)"
+    fi
+    rm -f "$tmpfile"
+    return $exit_code
+}
+
+check_e2e() {
+    if [ -z "$E2E_CMD" ]; then
+        return 0
+    fi
+    log "Running e2e tests: $E2E_CMD"
+    local tmpfile
+    tmpfile=$(mktemp)
+    eval "$E2E_CMD" 2>&1 | tee "$tmpfile"
+    local exit_code=${PIPESTATUS[0]}
+    if [ $exit_code -eq 0 ]; then
+        success "E2E tests passed"
+        LAST_E2E_OUTPUT=""
+    else
+        LAST_E2E_OUTPUT=$(tail -80 "$tmpfile")
+        warn "E2E tests failed (non-blocking)"
+    fi
+    rm -f "$tmpfile"
+    return $exit_code
+}
+
+# ── Lazy re-detection (handles greenfield bootstrap) ────────────────────────
+# After each feature, re-detect any empty commands from actual project files.
+# Persists discoveries to .env.local so the next run doesn't need to re-detect.
+
+update_env_local() {
+    local key="$1"
+    local value="$2"
+    local env_file="$PROJECT_DIR/.env.local"
+    [ ! -f "$env_file" ] && return
+
+    if grep -q "^${key}=" "$env_file" 2>/dev/null; then
+        sed -i.bak "s|^${key}=.*|${key}=\"${value}\"|" "$env_file"
+        rm -f "$env_file.bak"
+    else
+        printf '\n%s="%s"\n' "$key" "$value" >> "$env_file"
+    fi
+}
+
+redetect_if_empty() {
+    local persisted=false
+
+    if [ -z "$BUILD_CMD" ]; then
+        BUILD_CMD=$(detect_build_check)
+        if [ -n "$BUILD_CMD" ]; then
+            success "Auto-detected build check: $BUILD_CMD"
+            update_env_local "BUILD_CHECK_CMD" "$BUILD_CMD"
+            persisted=true
+        fi
+    fi
+    if [ -z "$TEST_CMD" ]; then
+        TEST_CMD=$(detect_test_check)
+        if [ -n "$TEST_CMD" ]; then
+            success "Auto-detected test suite: $TEST_CMD"
+            update_env_local "TEST_CHECK_CMD" "$TEST_CMD"
+            persisted=true
+        fi
+    fi
+    if [ -z "$LINT_CMD" ]; then
+        LINT_CMD=$(detect_lint_check)
+        if [ -n "$LINT_CMD" ]; then
+            success "Auto-detected lint check: $LINT_CMD"
+            update_env_local "LINT_CHECK_CMD" "$LINT_CMD"
+            persisted=true
+        fi
+    fi
+    if [ -z "$DB_MIGRATION_CMD" ]; then
+        DB_MIGRATION_CMD=$(detect_migration_cmd)
+        if [ -n "$DB_MIGRATION_CMD" ]; then
+            success "Auto-detected migration: $DB_MIGRATION_CMD"
+            update_env_local "MIGRATION_CMD" "$DB_MIGRATION_CMD"
+            persisted=true
+        fi
+    fi
+    if [ -z "$E2E_CMD" ]; then
+        E2E_CMD=$(detect_e2e_check)
+        if [ -n "$E2E_CMD" ]; then
+            success "Auto-detected e2e tests: $E2E_CMD"
+            update_env_local "E2E_CHECK_CMD" "$E2E_CMD"
+            persisted=true
+        fi
+    fi
+
+    if [ "$persisted" = true ]; then
+        log "Persisted newly detected commands to .env.local"
+    fi
+}
+
 should_run_step() {
     echo ",$POST_BUILD_STEPS," | grep -q ",$1,"
 }
@@ -401,8 +640,8 @@ extract_drift_targets() {
     local build_result="$1"
 
     # Try to extract from agent's structured output first
-    DRIFT_SPEC_FILE=$(echo "$build_result" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | xargs 2>/dev/null || echo "")
-    DRIFT_SOURCE_FILES=$(echo "$build_result" | grep "^SOURCE_FILES:" | tail -1 | cut -d: -f2- | xargs 2>/dev/null || echo "")
+    DRIFT_SPEC_FILE=$(echo "$build_result" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | trim)
+    DRIFT_SOURCE_FILES=$(echo "$build_result" | grep "^SOURCE_FILES:" | tail -1 | cut -d: -f2- | trim)
 
     # Fallback: derive from git diff if agent didn't provide them
     if [ -z "$DRIFT_SPEC_FILE" ]; then
@@ -498,7 +737,7 @@ DRIFT_UNRESOLVABLE: {what needs human attention and why}
 
         if echo "$DRIFT_RESULT" | grep -q "DRIFT_FIXED"; then
             local fix_summary
-            fix_summary=$(echo "$DRIFT_RESULT" | grep "DRIFT_FIXED" | tail -1 | cut -d: -f2- | xargs)
+            fix_summary=$(echo "$DRIFT_RESULT" | grep "DRIFT_FIXED" | tail -1 | cut -d: -f2- | trim)
             success "Drift detected and auto-fixed: $fix_summary"
             # Verify the fix didn't break build or tests
             if ! check_build; then
@@ -512,7 +751,7 @@ DRIFT_UNRESOLVABLE: {what needs human attention and why}
 
         if echo "$DRIFT_RESULT" | grep -q "DRIFT_UNRESOLVABLE"; then
             local unresolvable_reason
-            unresolvable_reason=$(echo "$DRIFT_RESULT" | grep "DRIFT_UNRESOLVABLE" | tail -1 | cut -d: -f2- | xargs)
+            unresolvable_reason=$(echo "$DRIFT_RESULT" | grep "DRIFT_UNRESOLVABLE" | tail -1 | cut -d: -f2- | trim)
             warn "Unresolvable drift: $unresolvable_reason"
             return 1
         fi
@@ -691,6 +930,23 @@ The SPEC_FILE line is REQUIRED when FEATURE_SPEC_READY is reported.
 implement_prompt() {
     local feature_name="$1"
     local spec_file="$2"
+
+    # For early features (infrastructure), remind the agent to configure build tooling
+    local infra_hint=""
+    if [ "${LOOP_BUILT:-0}" -lt 2 ]; then
+        infra_hint="
+INFRASTRUCTURE NOTE: This is an early feature in the build. If this feature creates or modifies
+project infrastructure (package.json scripts, tsconfig, test framework config, ORM/migration config,
+linter config), also update .env.local with the correct verification commands:
+  BUILD_CHECK_CMD — e.g. \"npx tsc --noEmit\" or \"cargo check\"
+  TEST_CHECK_CMD  — e.g. \"pnpm test\" or \"pytest\"
+  LINT_CHECK_CMD  — e.g. \"pnpm lint\" or \"ruff check .\"
+  MIGRATION_CMD   — e.g. \"pnpm db:push\" or \"npx prisma db push\"
+These are used by the build loop for deterministic verification after each feature.
+Only set commands for tools that this feature actually configures (leave others empty).
+"
+    fi
+
     echo "
 The spec for \"$feature_name\" exists at $spec_file. Implement it through RED → GREEN:
 
@@ -709,7 +965,7 @@ CRITICAL IMPLEMENTATION RULES (from roadmap):
 - NO placeholder UI. Components must be wired to real data sources.
 - Features must work end-to-end with real user data or they are not done.
 - Real validation, real error handling, real flows.
-
+$infra_hint
 Before outputting your final signals, write a session summary between these exact markers:
 SESSION_SUMMARY_START
 - Decisions: [key architectural or design decisions you made and why]
@@ -761,6 +1017,13 @@ $LAST_BUILD_OUTPUT
         prompt="$prompt
 TEST SUITE FAILURE OUTPUT (last 80 lines):
 $LAST_TEST_OUTPUT
+"
+    fi
+
+    if [ -n "$LAST_LINT_OUTPUT" ]; then
+        prompt="$prompt
+LINT CHECK FAILURE OUTPUT (last 50 lines):
+$LAST_LINT_OUTPUT
 "
     fi
 
@@ -980,8 +1243,8 @@ run_build_loop() {
                     # Fall through to NO_FEATURES_READY handling below
                 elif echo "$SPEC_RESULT" | grep -q "FEATURE_SPEC_READY"; then
                     # ── Phase 2: Implement (BUILD_MODEL) ──
-                    FEATURE_FOR_IMPL=$(echo "$SPEC_RESULT" | grep "FEATURE_SPEC_READY" | tail -1 | cut -d: -f2- | xargs)
-                    SPEC_FILE_FOR_IMPL=$(echo "$SPEC_RESULT" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | xargs)
+                    FEATURE_FOR_IMPL=$(echo "$SPEC_RESULT" | grep "FEATURE_SPEC_READY" | tail -1 | cut -d: -f2- | trim)
+                    SPEC_FILE_FOR_IMPL=$(echo "$SPEC_RESULT" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | trim)
                     log "Phase 2: Implement (model: ${BUILD_MODEL:-${AGENT_MODEL:-default}}) — $FEATURE_FOR_IMPL"
                     run_agent "$BUILD_MODEL" "$(implement_prompt "$FEATURE_FOR_IMPL" "$SPEC_FILE_FOR_IMPL")" 2>&1 | tee "$BUILD_OUTPUT" || true
                     BUILD_RESULT=$(cat "$BUILD_OUTPUT")
@@ -1019,19 +1282,34 @@ run_build_loop() {
             # ── Check if the agent reported success ──
             if echo "$BUILD_RESULT" | grep -q "FEATURE_BUILT"; then
                 local feature_name
-                feature_name=$(echo "$BUILD_RESULT" | grep "FEATURE_BUILT" | tail -1 | cut -d: -f2- | xargs)
+                feature_name=$(echo "$BUILD_RESULT" | grep "FEATURE_BUILT" | tail -1 | cut -d: -f2- | trim)
+
+                # Re-detect commands if any are empty (handles greenfield bootstrap)
+                redetect_if_empty
+
                 local phase_ok=true
 
-                # ── Post-build verification (Phase 2 output) ──
+                # ── Post-build verification: build → migration → test (blocking) ──
                 if ! check_working_tree_clean; then
                     warn "Agent said FEATURE_BUILT but left uncommitted changes"
                     phase_ok=false
                 elif ! check_build; then
                     warn "Agent said FEATURE_BUILT but build check failed"
                     phase_ok=false
-                elif should_run_step "test" && ! check_tests; then
+                fi
+
+                if [ "$phase_ok" = true ]; then
+                    check_migration || warn "Migration failed (continuing — database may not be available)"
+                fi
+
+                if [ "$phase_ok" = true ] && should_run_step "test" && ! check_tests; then
                     warn "Agent said FEATURE_BUILT but tests failed"
                     phase_ok=false
+                fi
+
+                # Lint is non-blocking — warn but don't retry
+                if [ "$phase_ok" = true ]; then
+                    check_lint || true
                 fi
 
                 if [ "$phase_ok" = true ]; then
@@ -1063,7 +1341,6 @@ run_build_loop() {
                             success "Reverted to pre-refactor commit"
                         else
                             success "Refactor complete — build and tests still pass"
-                            # Capture refactor session summary (only if not reverted)
                             local refactor_summary
                             refactor_summary=$(extract_session_summary "$REFACTOR_RESULT" "Refactor Phase")
                             if [ -n "$refactor_summary" ]; then
@@ -1081,6 +1358,9 @@ run_build_loop() {
                         if [ -n "$LAST_DRIFT_SUMMARY" ]; then
                             FEATURE_SESSION_NOTES="${FEATURE_SESSION_NOTES}${LAST_DRIFT_SUMMARY}"
                         fi
+
+                        # ── E2E tests (non-blocking, after drift when code is final) ──
+                        check_e2e || true
 
                         # ── Phase 5: Compound (COMPOUND_MODEL) ──
                         if [ "$COMPOUND" = "true" ]; then
@@ -1102,7 +1382,6 @@ run_build_loop() {
                                 warn "Code review broke tests!"
                             fi
                         fi
-
 
                         LOOP_BUILT=$((LOOP_BUILT + 1))
                         local feature_end=$(date +%s)
@@ -1187,22 +1466,29 @@ cleanup_all_worktrees() {
 
 # ── Main ──────────────────────────────────────────────────────────────────
 
+show_cmd_status() {
+    local label="$1" cmd="$2" env_var="$3"
+    if [ -n "$cmd" ]; then
+        echo "  $label: $cmd"
+    else
+        echo "  $label: auto-detect (will re-detect after each feature, or set $env_var)"
+    fi
+}
+
 echo ""
 echo "Build loop (local only, no remote/push/PR)"
 echo "CLI provider: $CLI_PROVIDER"
 echo "Base branch: $MAIN_BRANCH"
 echo "Branch strategy: $BRANCH_STRATEGY"
 echo "Max features: $MAX_FEATURES | Max retries per feature: $MAX_RETRIES"
-if [ -n "$BUILD_CMD" ]; then
-    echo "Build check: $BUILD_CMD"
-else
-    echo "Build check: disabled (set BUILD_CHECK_CMD to enable)"
-fi
-if [ -n "$TEST_CMD" ]; then
-    echo "Test suite: $TEST_CMD"
-else
-    echo "Test suite: disabled (set TEST_CHECK_CMD to enable)"
-fi
+echo ""
+echo "Verification commands:"
+show_cmd_status "Build" "$BUILD_CMD" "BUILD_CHECK_CMD"
+show_cmd_status "Test" "$TEST_CMD" "TEST_CHECK_CMD"
+show_cmd_status "Lint" "$LINT_CMD" "LINT_CHECK_CMD"
+show_cmd_status "Migration" "$DB_MIGRATION_CMD" "MIGRATION_CMD"
+show_cmd_status "E2E" "$E2E_CMD" "E2E_CHECK_CMD"
+echo ""
 if [ "$DRIFT_CHECK" = "true" ]; then
     echo "Drift check: enabled (max retries: $MAX_DRIFT_RETRIES)"
 else
@@ -1314,7 +1600,7 @@ SPEC_FAILED: {reason}
             INDEP_SPEC_RESULT=$(cat "$BUILD_OUTPUT")
 
             if echo "$INDEP_SPEC_RESULT" | grep -q "FEATURE_SPEC_READY"; then
-                INDEP_SPEC_FILE=$(echo "$INDEP_SPEC_RESULT" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | xargs)
+                INDEP_SPEC_FILE=$(echo "$INDEP_SPEC_RESULT" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | trim)
                 log "[independent] Phase 2: Implement $fn"
                 run_agent "$BUILD_MODEL" "$(implement_prompt "$fn" "${INDEP_SPEC_FILE:-.specs/features/unknown.feature.md}")" 2>&1 | tee "$BUILD_OUTPUT" || true
             else

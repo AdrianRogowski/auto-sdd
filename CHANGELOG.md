@@ -2,6 +2,35 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.2.0 — Extended Build Validation Pipeline
+
+### New
+- **Lint check** (`LINT_CHECK_CMD`) — Auto-detected from `package.json` lint script, ruff, cargo clippy. Non-blocking (warns, doesn't retry). Runs after tests pass.
+- **Migration check** (`MIGRATION_CMD`) — Auto-detected from drizzle, prisma, alembic, django. Only runs when schema files change (detected via `git diff`). Non-blocking (database may not be available).
+- **E2E check** (`E2E_CHECK_CMD`) — Auto-detected from playwright or cypress config. Non-blocking. Runs after drift check when code is final (most expensive check).
+- **Lazy re-detection** — All check commands are re-detected after each feature if empty. Handles greenfield projects where Feature 1 creates the infrastructure (package.json, tsconfig, etc.) that didn't exist at startup. Newly detected commands are persisted back to `.env.local`.
+- **Infrastructure hint** — For the first 2 features, the build prompt includes a reminder to update `.env.local` with verification commands if the feature creates project infrastructure.
+
+### Fixed
+- **`xargs` quoting bug** — Agent output containing single quotes (e.g., "what's") caused `xargs: unterminated quote` errors in signal parsing. Replaced all `xargs` calls with a `trim()` function using `sed`.
+
+### Changed
+- Post-build verification ordering: build → migration → test → lint (was: build → test).
+- E2E runs after drift check (was: not available).
+- Startup output shows all 5 verification commands in a table with "auto-detect" for empty commands.
+- Lint failure output is included in retry agent context.
+
+### Config (.env.local)
+
+New options:
+```
+LINT_CHECK_CMD=""       # Auto-detected (npm run lint, ruff, clippy)
+MIGRATION_CMD=""        # Auto-detected (drizzle push, prisma push, alembic)
+E2E_CHECK_CMD=""        # Auto-detected (playwright, cypress)
+```
+
+All check commands now support `"skip"` to explicitly disable.
+
 ## 2.1.0 — Red-Green-Refactor TDD
 
 ### New
