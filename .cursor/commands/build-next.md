@@ -44,13 +44,22 @@ Read `.specs/roadmap.md` and `.specs/vision.md` to understand:
 
 ## Step 2: Select Next Feature
 
-Find the first feature where:
+**Priority 1**: Resume any feature marked 🔄 (in progress). It was started in a previous run but not finished — pick it up and complete it.
+
+**Priority 2**: If no in-progress feature, find the first feature where:
 1. Status is ⬜ (pending)
 2. All dependencies are ✅ (completed)
 
 ### Selection Logic
 
 ```
+// Priority 1: Resume in-progress work
+for each phase in order:
+  for each feature in phase:
+    if feature.status == 🔄:
+      return feature  // Resume unfinished work
+
+// Priority 2: Start next pending feature
 for each phase in order:
   for each feature in phase:
     if feature.status == ⬜:

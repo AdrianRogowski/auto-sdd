@@ -299,9 +299,9 @@ Every feature build goes through a multi-stage pipeline. Each agent-based step r
 
 **Infrastructure hint**: For early features (first 2), the build prompt includes a reminder to update `.env.local` with correct verification commands if the feature creates project infrastructure.
 
-**Roadmap status**: The spec agent marks the feature 🔄 (in progress). The **script** (not any agent) marks it ✅ only after all phases pass. This prevents features being marked complete when post-build verification fails.
+**Roadmap status**: The spec agent marks the feature 🔄 (in progress). The **script** (not any agent) marks it ✅ only after all phases pass. This prevents features being marked complete when post-build verification fails. If the loop is interrupted and restarted, it will **resume any 🔄 in-progress feature** before picking up the next ⬜ pending one.
 
-**Rate limiting**: When using Claude Code (`CLI_PROVIDER=claude`) with rate-limited models, the scripts detect rate limit errors and retry with exponential backoff (configurable via `RATE_LIMIT_BACKOFF` and `RATE_LIMIT_MAX_WAIT`).
+**Transient error handling**: The scripts detect rate limit errors (429, overloaded) AND transient network errors (connection reset, ECONNRESET, ETIMEDOUT, socket hang up, etc.) and retry with exponential backoff (configurable via `RATE_LIMIT_BACKOFF` and `RATE_LIMIT_MAX_WAIT`).
 
 **Model selection**: Each phase can use a different model: `SPEC_MODEL`, `BUILD_MODEL`, `REFACTOR_MODEL`, `DRIFT_MODEL`, `COMPOUND_MODEL`, `REVIEW_MODEL`.
 
@@ -506,8 +506,8 @@ Ordered list of features with dependencies. Managed by:
 │                              │                                  │
 │                              ▼                                  │
 │                       ┌─────────────┐                           │
-│                       │ /build-next │ ──▶ Picks next pending    │
-│                       └─────────────┘     feature, builds it    │
+│                       │ /build-next │ ──▶ Resumes 🔄 or picks   │
+│                       └─────────────┘     next ⬜, builds it    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -571,7 +571,7 @@ COMPOUND_MODEL=""             # Phase 5: Compound/learnings agent
 RETRY_MODEL=""                # Retry agent (fixing build/test failures)
 REVIEW_MODEL=""               # Code-review agent (optional)
 
-# Rate limit handling (Claude Code with rate-limited models)
+# Transient error handling (rate limits + network errors like connection reset)
 RATE_LIMIT_BACKOFF=60         # Initial wait in seconds
 RATE_LIMIT_MAX_WAIT=18000     # Max wait (~5 hours)
 ```

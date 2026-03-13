@@ -147,13 +147,13 @@ run_agent() {
         output_text=$(cat "$agent_output")
         rm -f "$agent_output"
 
-        if echo "$output_text" | grep -qi "rate.limit\|overloaded\|429\|too many requests\|capacity"; then
+        if echo "$output_text" | grep -qi "rate.limit\|overloaded\|429\|too many requests\|capacity\|connection.reset\|ECONNRESET\|network.error\|socket.hang.up\|ETIMEDOUT\|ECONNREFUSED\|EAI_AGAIN\|EPIPE\|fetch.failed"; then
             if [ "$total_waited" -ge "$RATE_LIMIT_MAX_WAIT" ]; then
-                warn "Rate limited and max wait ($RATE_LIMIT_MAX_WAIT s) exceeded. Giving up."
+                warn "Transient error and max wait ($RATE_LIMIT_MAX_WAIT s) exceeded. Giving up."
                 echo "$output_text"
                 return 1
             fi
-            warn "Rate limited. Waiting ${backoff}s before retry... (total waited: ${total_waited}s)"
+            warn "Transient error detected. Waiting ${backoff}s before retry... (total waited: ${total_waited}s)"
             sleep "$backoff"
             total_waited=$((total_waited + backoff))
             backoff=$((backoff * 2))
@@ -621,15 +621,17 @@ for i in $(seq 1 "$MAX_FEATURES"); do
 
     spec_prompt="
 Run the /build-next command to find the next feature, then create the spec ONLY:
-1. Read .specs/roadmap.md and find the next pending feature
-2. Check that all dependencies are completed
-3. If a feature is ready:
-   - Update roadmap to mark it 🔄 in progress
+1. Read .specs/roadmap.md
+2. First, check for any feature marked 🔄 (in progress) — if found, resume that feature (it was started but not finished in a previous run)
+3. If no in-progress feature, find the next ⬜ (pending) feature whose dependencies are all ✅ (completed)
+4. If a feature is ready:
+   - If it was ⬜ pending, update roadmap to mark it 🔄 in progress
+   - Check if a spec already exists for this feature in .specs/features/ — if so, run /spec-first in update mode
    - Run /spec-first {feature} (WITHOUT --full) — create or update the spec only, do NOT implement
    - Do NOT write tests, do NOT implement, do NOT commit yet
    - Regenerate mapping: run ./scripts/generate-mapping.sh
-4. If no features are ready, output: NO_FEATURES_READY
-5. If spec fails, output: SPEC_FAILED: {reason}
+5. If no features are ready, output: NO_FEATURES_READY
+6. If spec fails, output: SPEC_FAILED: {reason}
 
 Output EXACTLY:
 FEATURE_SPEC_READY: {feature name}
