@@ -12,7 +12,9 @@ If `.sdd-upgrade/` doesn't exist yet, this command automatically runs `git auto-
 2. Check `.sdd-upgrade/` exists → if missing, auto-stage by running `git auto-upgrade`. If that fails, error: "Failed to stage upgrade files. Check network and try 'git auto-upgrade' manually."
 3. Read CURRENT version from `VERSION` or `.specs/.sdd-version` (default "1.0.0")
 4. Read TARGET version from `.sdd-upgrade/VERSION` (default "2.1.0")
-5. If TARGET <= CURRENT → "Already on latest version. No upgrade needed."
+5. If TARGET > CURRENT → Proceed with upgrade (label: UPGRADE)
+6. If TARGET = CURRENT → Proceed with re-sync (label: RE-SYNC). Even at the same version, files may have drifted from partial migrations or manual edits.
+7. If TARGET < CURRENT → "Installed version is newer than template. Skipping."
 
 ## Stock vs Custom Detection
 

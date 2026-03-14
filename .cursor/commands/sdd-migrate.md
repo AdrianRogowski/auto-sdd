@@ -25,10 +25,12 @@ Read CURRENT version from: VERSION or .specs/.sdd-version (or "1.0.0" if neither
 Read TARGET version from: .sdd-upgrade/VERSION (or "2.0.0" if missing)
 
 Compare versions:
-├── TARGET > CURRENT → Proceed with upgrade
-├── TARGET = CURRENT → "Already on latest version (X.Y.Z). No upgrade needed."
+├── TARGET > CURRENT → Proceed with upgrade (label: UPGRADE)
+├── TARGET = CURRENT → Proceed with re-sync (label: RE-SYNC)
 └── TARGET < CURRENT → "Installed version is newer than template. Skipping."
 ```
+
+**Re-sync rationale:** Even at the same version, files may have drifted (partial previous migration, manual edits, or template patches without a version bump). A re-sync ensures all stock files match the template.
 
 ---
 
@@ -210,11 +212,11 @@ rm -rf .sdd-upgrade
 
 ## Step 13: Summary
 
-Output final summary:
+Output final summary. Use the label from the version check (UPGRADE or RE-SYNC):
 
 ```
 ═══════════════════════════════════════════════════════════════════
-                    UPGRADE COMPLETE: {old} → {new}
+          {UPGRADE|RE-SYNC} COMPLETE: {old} → {new}
 ═══════════════════════════════════════════════════════════════════
 
 ✓ Synced [N] stock commands (replaced/added)
@@ -246,7 +248,7 @@ What's new in this version:
 |-------|---------|
 | No `.sdd-upgrade/` | "Run 'git auto-upgrade' first to stage the latest files" |
 | No `.specs/` | "Not an SDD project. Use 'git auto' for fresh install" |
-| Same version | "Already on latest version (X.Y.Z). No upgrade needed." |
+| Same version | Re-sync all stock files (files may have drifted) |
 | Script fails | Show error, don't delete staging dir so user can retry |
 
 ---

@@ -2,6 +2,11 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.2.1 — Re-sync on Same Version
+
+### Fixed
+- **`/sdd-migrate` same-version skip** — When TARGET = CURRENT version, the command now performs a full re-sync instead of skipping. This ensures files added to the template without a version bump (or missed during a partial migration) are still picked up. The summary labels the operation as "RE-SYNC" to distinguish from a version upgrade.
+
 ## 2.2.0 — Extended Build Validation Pipeline
 
 ### New
