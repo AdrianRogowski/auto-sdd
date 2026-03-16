@@ -2,6 +2,11 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.2.3 — Fix False-Positive Transient Error Detection
+
+### Fixed
+- **Transient error false positives** — `run_agent()` in all three scripts (`build-loop-local.sh`, `overnight-autonomous.sh`, `doc-loop-local.sh`) grepped the entire agent output for keywords like `429`, `capacity`, `fetch.failed`. If the agent wrote code handling HTTP 429 or mentioned "capacity" in a comment, the script incorrectly triggered exponential backoff (up to 5 hours). Now: only checks when the CLI exits with a non-zero code, and only inspects the last 5 lines of output where CLI error messages actually appear.
+
 ## 2.2.2 — Fix Ambiguous /build-next Reference in Script Prompts
 
 ### Fixed

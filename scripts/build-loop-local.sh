@@ -402,18 +402,26 @@ run_agent() {
         output_text=$(cat "$agent_output")
         rm -f "$agent_output"
 
-        if echo "$output_text" | grep -qi "rate.limit\|overloaded\|429\|too many requests\|capacity\|connection.reset\|ECONNRESET\|network.error\|socket.hang.up\|ETIMEDOUT\|ECONNREFUSED\|EAI_AGAIN\|EPIPE\|fetch.failed"; then
-            if [ "$total_waited" -ge "$RATE_LIMIT_MAX_WAIT" ]; then
-                warn "Transient error and max wait ($RATE_LIMIT_MAX_WAIT s) exceeded. Giving up."
-                echo "$output_text"
-                return 1
+        # Only check for transient errors when the CLI exited with an error.
+        # Grepping the full output caused false positives when the agent wrote
+        # code mentioning "429", "capacity", etc. Now we check exit code first,
+        # then only inspect the last 5 lines (where CLI error messages appear).
+        if [ "$exit_code" -ne 0 ]; then
+            local tail_output
+            tail_output=$(echo "$output_text" | tail -5)
+            if echo "$tail_output" | grep -qi "rate.limit\|overloaded\|429\|too many requests\|capacity\|connection.reset\|ECONNRESET\|network.error\|socket.hang.up\|ETIMEDOUT\|ECONNREFUSED\|EAI_AGAIN\|EPIPE\|fetch.failed"; then
+                if [ "$total_waited" -ge "$RATE_LIMIT_MAX_WAIT" ]; then
+                    warn "Transient error and max wait ($RATE_LIMIT_MAX_WAIT s) exceeded. Giving up."
+                    echo "$output_text"
+                    return 1
+                fi
+                warn "Transient error detected. Waiting ${backoff}s before retry... (total waited: ${total_waited}s)"
+                sleep "$backoff"
+                total_waited=$((total_waited + backoff))
+                backoff=$((backoff * 2))
+                [ "$backoff" -gt "$RATE_LIMIT_MAX_WAIT" ] && backoff=$RATE_LIMIT_MAX_WAIT
+                continue
             fi
-            warn "Transient error detected. Waiting ${backoff}s before retry... (total waited: ${total_waited}s)"
-            sleep "$backoff"
-            total_waited=$((total_waited + backoff))
-            backoff=$((backoff * 2))
-            [ "$backoff" -gt "$RATE_LIMIT_MAX_WAIT" ] && backoff=$RATE_LIMIT_MAX_WAIT
-            continue
         fi
 
         return $exit_code
