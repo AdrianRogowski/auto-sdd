@@ -2,6 +2,11 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.2.2 — Fix Ambiguous /build-next Reference in Script Prompts
+
+### Fixed
+- **Spec-phase prompt ambiguity** — `build-loop-local.sh` and `overnight-autonomous.sh` spec prompts said "Run the /build-next command" then contradicted it with "spec ONLY, do NOT implement." Since `/build-next` always runs `/spec-first --full`, agents could follow the command spec instead of the inline instructions, causing the full TDD cycle to run in the spec phase. Replaced with "Find the next feature from the roadmap" and an explicit "do NOT run /build-next or /spec-first --full" guard.
+
 ## 2.2.1 — Re-sync on Same Version
 
 ### Fixed

@@ -903,7 +903,7 @@ cleanup_branch_sequential() {
 
 # Phase 1: Spec only (no --full). Uses SPEC_MODEL.
 SPEC_PROMPT='
-Run the /build-next command to find the next feature, then create the spec ONLY:
+Find the next feature from the roadmap and create the spec ONLY (do NOT run /build-next or /spec-first --full):
 
 1. Read .specs/roadmap.md
 2. First, check for any feature marked 🔄 (in progress) — if found, resume that feature (it was started but not finished in a previous run)

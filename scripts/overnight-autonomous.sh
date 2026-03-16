@@ -616,11 +616,11 @@ for i in $(seq 1 "$MAX_FEATURES"); do
     
     git checkout -b "$BRANCH_NAME"
     
-    # Run /build-next: spec phase then implement phase
+    # Spec phase then implement phase (two-phase, does NOT invoke /build-next)
     BUILD_OUTPUT=$(mktemp)
 
     spec_prompt="
-Run the /build-next command to find the next feature, then create the spec ONLY:
+Find the next feature from the roadmap and create the spec ONLY (do NOT run /build-next or /spec-first --full):
 1. Read .specs/roadmap.md
 2. First, check for any feature marked 🔄 (in progress) — if found, resume that feature (it was started but not finished in a previous run)
 3. If no in-progress feature, find the next ⬜ (pending) feature whose dependencies are all ✅ (completed)
