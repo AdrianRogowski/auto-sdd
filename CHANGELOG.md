@@ -2,6 +2,17 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.2.4 — Sync CLAUDE.md with Cursor Rules
+
+### Fixed
+- **CLAUDE.md missing command triggers** — Added the full natural language trigger mapping (e.g., "spec first", "go ahead", "build it", "ship it") and full mode triggers ("full", "auto", "no stops", "don't pause") that were only in `.cursor/rules/specs-workflow.mdc`.
+- **CLAUDE.md missing SPEC/TDD step breakdowns** — Added the explicit 7-step SPEC process and 6-step /tdd process that Cursor had.
+- **CLAUDE.md missing greenfield behavior** — Added "When `/spec-first` Runs on Greenfield" (auto-create design tokens) and "When a Spec References New Components" (auto-create stubs) sections.
+- **CLAUDE.md missing `design_refs` frontmatter field** — Added to both feature spec template and mapping frontmatter example.
+- **CLAUDE.md missing frontmatter fields table** — Added table documenting when to update each field.
+- **CLAUDE.md missing persona "Context" field** — Added "how the user spends their day, devices, technical level" and expanded persona usage to match Cursor's before/after writing detail.
+- **CLAUDE.md missing pause triggers** — Added "show me the Gherkin", "what would this look like?", "before you implement...", "let me see".
+
 ## 2.2.3 — Fix False-Positive Transient Error Detection
 
 ### Fixed

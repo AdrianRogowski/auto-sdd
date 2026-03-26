@@ -34,6 +34,44 @@ Per feature (Red-Green-Refactor TDD):
 
 ---
 
+## Command Triggers
+
+When the user says any of these phrases, **automatically invoke `/spec-first`**:
+
+| User says | Action |
+|-----------|--------|
+| "spec first" | Run `/spec-first {feature}` |
+| "spec-first" | Run `/spec-first {feature}` |
+| "write a spec for" | Run `/spec-first {feature}` |
+| "create a spec" | Run `/spec-first {feature}` |
+| "spec this out" | Run `/spec-first {feature}` |
+| "spec out" | Run `/spec-first {feature}` |
+| "plan this feature" | Run `/spec-first {feature}` |
+| "write the spec" | Run `/spec-first {feature}` |
+| "create spec" | Run `/spec-first {feature}` |
+| "update the spec for" | Run `/spec-first {feature}` (update mode) |
+| "update spec" | Run `/spec-first {feature}` (update mode) |
+
+When the user says any of these after a spec is shown, **invoke `/tdd`**:
+
+| User says | Action |
+|-----------|--------|
+| "tdd" | Run `/tdd {feature}` |
+| "go ahead" | Run `/tdd` with current spec |
+| "build it" | Run `/tdd` with current spec |
+| "implement it" | Run `/tdd` with current spec |
+| "ship it" | Run `/tdd` with current spec |
+
+Extract the feature description from the rest of their message.
+
+### Full Mode Triggers
+
+If user includes "full", "auto", "no stops", or "don't pause":
+- Add `--full` flag to the command
+- Example: "spec first user auth, full mode" → `/spec-first user auth --full`
+
+---
+
 ## Directory Structure
 
 ```
@@ -88,14 +126,23 @@ All three are optional but improve every spec. `/spec-first` will note what's mi
 User personas live in `.specs/personas/` and are loaded before every spec.
 
 **What they contain:**
+- **Context** — how the user spends their day, devices, technical level
 - **Vocabulary** — their words vs developer words → drives all UI labels
 - **Patience level** — Very Low / Low / Medium / High → drives flow length
 - **Frustrations** — patterns to avoid
 - **Success metric** — how they measure if the app works
 
-**How they're used:** `/spec-first` reads personas before writing, uses their vocabulary in Gherkin and mockups, then re-reads the draft through persona eyes and revises. The revision notes appear at the pause point so you see what changed.
+**How they're used:**
 
-Most projects need 2: a primary persona and an anti-persona (who you're NOT building for).
+**Before writing**: Loads persona vocabulary, patience level, and frustrations. This shapes the Gherkin scenarios, mockup labels, and flow complexity from the start.
+
+**After writing**: Re-reads the spec through each persona's eyes. Revises vocabulary, simplifies flows, cuts anti-persona features. Reports what changed at the pause point.
+
+### Creating Personas
+
+Run `/personas` or they're auto-suggested on first `/spec-first` run. Most projects need 2:
+- **Primary**: The main user. Every feature must work for them.
+- **Anti-persona**: Who you're NOT building for. Prevents scope creep.
 
 ---
 
@@ -118,6 +165,20 @@ When implementing UI, use token names from `tokens.md` (not hardcoded values). T
 
 **Common categories:** Colors (primary, neutrals, semantic), Typography (1 font family, 4-5 sizes, 3 weights), Spacing (6 values), Radii (3 + full), Shadows (2).
 
+### When `/spec-first` Runs on Greenfield
+
+If no design system exists:
+1. Auto-create via `/design-tokens` flow (reads whatever context exists)
+2. Create `.cursor/rules/design-tokens.mdc` cursor rule
+3. Proceed with feature spec
+
+### When a Spec References New Components
+
+If ASCII mockup references a component that doesn't exist in `.specs/design-system/components/`:
+1. Auto-create a **stub** file: `.specs/design-system/components/{component}.md`
+2. Stub includes: name, purpose, "pending implementation" status
+3. After implementation, stub gets filled in (manually or via `/document-component`)
+
 ### Design System Maintenance
 
 `.specs/design-system/tokens.md` is the source of truth. When tokens change:
@@ -136,6 +197,25 @@ When implementing UI, use token names from `tokens.md` (not hardcoded values). T
 1. **Resolve spec**: Search `.specs/features/**/*.feature.md` for a spec matching the feature name (by path or frontmatter `feature:`)
 2. **If match found** → UPDATE mode: revise scenarios and mockup, preserve status/tests/components. With `--full`, continues through tests → implement → compound → commit
 3. **If no match** → CREATE mode: load personas + tokens, create new spec with Gherkin + ASCII mockup + user journey, revise through persona lens
+
+### What happens in the SPEC step:
+
+1. **Load context** — Read personas and design tokens
+2. **Write Gherkin** — Scenarios using persona vocabulary, matching patience level
+3. **Write mockup** — ASCII art referencing design tokens
+4. **Add user journey** — Where this feature fits in the user's flow
+5. **Persona revision** — Re-read through persona's eyes, revise, note changes
+6. **Create component stubs** — For any new UI components
+7. **Pause** — Show spec + revision notes, ask "Run `/tdd` when ready"
+
+### What happens in the /tdd step (Red-Green-Refactor):
+
+1. **RED** — Write failing tests from Gherkin scenarios
+2. **GREEN** — Implement until all tests pass
+3. **Drift Check L1** — Self-check spec vs code alignment
+4. **REFACTOR** — Clean up code, tests must still pass
+5. **Drift Check L1b** — Re-verify after refactoring
+6. **COMPOUND** — Extract learnings
 
 ### For New Features
 1. Run `/spec-first {feature}` — it will CREATE a spec if none exists
@@ -204,13 +284,18 @@ Each queue item gets a fresh agent context, so quality stays consistent even for
 
 ## Pause Triggers
 
-If the user says any of these, create the spec and **STOP** - wait for approval:
+If the user says any of these (or similar), create the spec and **STOP** - wait for approval:
 - "let me review first"
 - "write the spec first"
+- "show me the Gherkin"
 - "spec this out"
 - "don't implement yet"
 - "plan this first"
-- "hold on" / "wait"
+- "what would this look like?"
+- "before you implement..."
+- "hold on"
+- "wait"
+- "let me see"
 
 After showing spec: "Does this look right? Run `/tdd` when ready, or say 'go ahead' to start the Red-Green-Refactor cycle."
 
@@ -227,23 +312,29 @@ domain: domain-name
 source: path/to/source.tsx
 tests: []
 components: []
+design_refs: []
 personas: [primary, anti-persona]
-status: stub | specced | tested | implemented
+status: stub    # stub → specced → tested → implemented
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 ---
 
 # Feature Name
 
-**Source File**: path/to/file.tsx
-**Design System**: .specs/design-system/tokens.md
-**Personas**: .specs/personas/primary.md
+**Source File**: `path/to/file.tsx`
+**Design System**: `.specs/design-system/tokens.md`
+**Personas**: `.specs/personas/primary.md`
 
 ## Feature: [Name]
 
-[Who it's for and what problem it solves]
+[Brief description — who it's for and what problem it solves]
 
 ### Scenario: [Happy path]
+Given [precondition]
+When [action]
+Then [expected result]
+
+### Scenario: [Edge case]
 Given [precondition]
 When [action]
 Then [expected result]
@@ -256,12 +347,28 @@ Then [expected result]
 
 ## UI Mockup
 
-(ASCII art using persona vocabulary and design tokens)
+(ASCII art referencing design tokens, using persona vocabulary)
 
 ## Component References
 
-- Button: .specs/design-system/components/button.md
+- Button: `.specs/design-system/components/button.md`
+- Card: `.specs/design-system/components/card.md` (stub)
+
+## Learnings
+
+<!-- Updated via /compound -->
 ```
+
+### Frontmatter Fields
+
+| Field | Description | When to Update |
+|-------|-------------|----------------|
+| `status` | stub → specced → tested → implemented | Each workflow stage |
+| `tests` | Array of test file paths | After writing tests |
+| `components` | Array of component names | After implementation |
+| `design_refs` | Array of design system references | Spec creation |
+| `personas` | Array of persona names referenced | Spec creation |
+| `updated` | Last modified date | Any change |
 
 ---
 
@@ -406,6 +513,8 @@ tests:
   - path/to/test.ts
 components:
   - ComponentName
+design_refs:
+  - tokens.md
 personas:
   - primary
   - anti-persona

@@ -356,6 +356,7 @@ Every feature build goes through a multi-stage pipeline. Each agent-based step r
 User personas live in `.specs/personas/` and inform every feature spec. They're created once by `/personas` (or auto-suggested on first `/spec-first`) and referenced before every spec is written.
 
 **What they contain:**
+- **Context** — how the user spends their day, devices, technical level
 - **Vocabulary** — their words vs developer words → drives all UI labels
 - **Patience level** — Very Low / Low / Medium / High → drives flow length
 - **Frustrations** — interaction patterns to avoid
