@@ -45,6 +45,15 @@ When the user says any of these after a spec is shown, **invoke `/tdd`**:
 
 Extract the feature description from the rest of their message.
 
+When the user says any of these, **invoke the corresponding ralph/utility command**:
+
+| User says | Action |
+|-----------|--------|
+| "ralph setup", "set up ralph", "configure ralph" | Run `/ralph-setup` |
+| "ralph run", "run ralph", "start the loop", "run the loop" | Run `/ralph-run` |
+| "clean slate", "kill everything", "restart everything", "nuke localhost" | Run `/clean-slate` |
+| "generate guide", "update guide", "how to use guide" | Run `/guide` |
+
 **Create vs Update**: `/spec-first` auto-detects whether to create or update: searches `.specs/features/` for a matching spec (by path or frontmatter `feature:`). Match found → update existing spec. No match → create new spec. With `--full`, both paths continue through the full Red-Green-Refactor TDD cycle.
 
 ### Full Mode Triggers
@@ -337,6 +346,15 @@ Then [expected result]
 | `/update-test-docs` | Sync test documentation with actual tests |
 | `/catch-drift` | Detect and reconcile spec ↔ code drift |
 | `/verify-test-counts` | Run tests and reconcile counts vs documentation |
+
+### Ralph Commands (Build Loop Management)
+
+| Command | Purpose |
+|---------|---------|
+| `/ralph-setup` | Interactive wizard: configure .env.local with auto-detection |
+| `/ralph-run` | Show roadmap status, kill dev servers, launch build loop |
+| `/clean-slate` | Kill all processes on dev ports, optionally restart |
+| `/guide` | Generate/update GUIDE.md — living "how to use" guide for the built app |
 
 ### Git Workflow
 

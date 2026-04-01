@@ -2,6 +2,25 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.3.0 — Ralph Commands, Parallel Builds, Clean Slate
+
+### New
+- **`/ralph-setup`** — Interactive wizard that auto-detects project framework, test runner, build tool, and package manager, then generates a fully configured `.env.local` through guided prompts. Available in both Cursor and Claude Code.
+- **`/ralph-run`** — Build loop launcher that shows roadmap status, kills dev servers, and lets you pick what to run (single feature, build loop, parallel build, doc loop, overnight). Supports shortcuts like `/ralph-run parallel`.
+- **`/guide`** — Generates a living `GUIDE.md` for the built application (not SDD itself). Stitches user flows from feature specs, lists screens, API endpoints, env vars, architecture, and key gotchas from learnings.
+- **`/clean-slate`** — Kills all processes on dev ports and optionally restarts the dev server. Also available as `scripts/clean-slate.sh` for zero-overhead usage.
+- **`BRANCH_STRATEGY=parallel`** — Concurrent feature builds in separate git worktrees. Fans out up to `PARALLEL_FEATURES` (default: 3) background agent processes, then merges results onto an integration branch with auto-conflict resolution and build/test verification per merge.
+- **`PARALLEL_FEATURES`** env var — Max concurrent agent processes for parallel builds (default: 3).
+- **`MERGE_STRATEGY`** env var — How to order merges after parallel builds: `dependency` (respects roadmap deps, default) or `fifo` (first done, first merged).
+- **`DEV_PORTS`** / **`DEV_CMD`** env vars — Configure which ports `/clean-slate` kills and what command restarts the dev server.
+- **Subagent patterns rule** (`.cursor/rules/subagent-patterns.mdc`) — Teaches the agent when and how to use the Task tool for parallel work within SDD commands (parallel reads, parallel validation, batch processing).
+- **Natural language triggers** for new commands: "ralph setup", "ralph run", "clean slate", "nuke localhost", "generate guide", etc.
+
+### Changed
+- **`CLAUDE.md`** — Full subagent patterns reference inlined (Claude Code can't read `.cursor/rules/`), parallel builds section, new command tables and triggers.
+- **`specs-workflow.mdc`** — Ralph command triggers and command table added.
+- **`README.md`** — Ralph commands section, parallel build examples, clean-slate script documented.
+
 ## 2.2.4 — Sync CLAUDE.md with Cursor Rules
 
 ### Fixed

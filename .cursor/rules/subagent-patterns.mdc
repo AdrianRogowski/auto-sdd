@@ -1,0 +1,89 @@
+---
+description: When to use subagents (Task tool) for parallel work in SDD commands
+globs:
+alwaysApply: true
+---
+
+# Subagent Patterns for SDD
+
+When executing SDD commands, use subagents (the Task tool) to parallelize independent work. This applies to both interactive commands and the build loop.
+
+## When to Fan Out
+
+### During /spec-first
+- **Parallel reads**: Load personas, design tokens, and search for existing spec simultaneously (3 parallel explore subagents)
+- **Component stub creation**: If mockup references 3+ new components, create stubs in parallel
+
+### During /tdd
+- **Post-GREEN validation**: Run build check, lint check, and test check simultaneously (3 parallel shell subagents)
+- **Drift check + compound**: After refactor, drift check and compound can start reading files in parallel (drift checks code, compound reads learnings index)
+
+### During /build-next
+- **Context loading**: Read vision, personas, design tokens, related specs, and learnings index in parallel (5 parallel reads)
+- **Post-build phases**: If drift check and code review are both enabled, they read independent file sets — run simultaneously
+
+### During /check-coverage
+- **Parallel analysis**: Check spec coverage, test coverage, and mapping consistency as 3 independent subagents
+
+### During /catch-drift
+- **Multi-spec drift scan**: When scanning multiple specs, batch 3-5 specs per subagent instead of one at a time
+
+### During /guide
+- **Parallel gathering**: Read all feature specs, codebase files, and learnings in parallel batches
+
+### During /ralph-run
+- **Pre-flight checks**: Validate CLI, check ports, read roadmap simultaneously
+
+## When NOT to Fan Out
+
+- **Sequential dependencies**: Spec must complete before tests, tests before implementation
+- **Git operations**: Only one agent should touch git at a time (commits, branches, merges)
+- **Roadmap updates**: Single writer to avoid race conditions on roadmap.md
+- **Small tasks**: If the total work is < 10 seconds, the subagent overhead isn't worth it
+
+## How to Fan Out
+
+Use the Task tool with appropriate subagent types:
+
+```
+# For file reading / exploration
+subagent_type: "explore" with model: "fast"
+
+# For shell commands (build, test, lint)
+subagent_type: "shell" with model: "fast"
+
+# For complex analysis (drift check, code review)
+subagent_type: "generalPurpose"
+```
+
+### Pattern: Parallel Reads Then Sequential Write
+
+```
+1. Fan out: 3 explore subagents read personas, tokens, existing specs
+2. Collect results
+3. Sequential: Write the spec using all gathered context
+```
+
+### Pattern: Parallel Validation
+
+```
+1. Agent completes implementation
+2. Fan out: shell subagent runs tests, shell subagent runs build, shell subagent runs lint
+3. Collect results
+4. If all pass → continue
+5. If any fail → fix sequentially (failures may be related)
+```
+
+### Pattern: Batch Processing
+
+For commands that process multiple items (drift-scan, doc-loop, check-coverage):
+```
+1. Gather list of items to process
+2. Chunk into batches of PARALLEL_FEATURES (default: 3)
+3. Fan out: one subagent per chunk
+4. Collect and merge results
+```
+
+## Build Loop Integration
+
+The `BRANCH_STRATEGY=parallel` mode in `build-loop-local.sh` already handles script-level parallelism (multiple agent processes in separate worktrees). Within each agent process, use the patterns above for command-level parallelism.

@@ -64,6 +64,15 @@ When the user says any of these after a spec is shown, **invoke `/tdd`**:
 
 Extract the feature description from the rest of their message.
 
+When the user says any of these, **invoke the corresponding ralph/utility command**:
+
+| User says | Action |
+|-----------|--------|
+| "ralph setup", "set up ralph", "configure ralph" | Run `/ralph-setup` |
+| "ralph run", "run ralph", "start the loop", "run the loop" | Run `/ralph-run` |
+| "clean slate", "kill everything", "restart everything", "nuke localhost" | Run `/clean-slate` |
+| "generate guide", "update guide", "how to use guide" | Run `/guide` |
+
 ### Full Mode Triggers
 
 If user includes "full", "auto", "no stops", or "don't pause":
@@ -442,11 +451,96 @@ Then [expected result]
 | `/catch-drift` | Detect spec ↔ code drift |
 | `/verify-test-counts` | Reconcile test counts |
 
+### Ralph Commands (Build Loop Management)
+| Command | Purpose |
+|---------|---------|
+| `/ralph-setup` | Interactive wizard: configure .env.local with auto-detection |
+| `/ralph-run` | Show roadmap status, kill dev servers, launch build loop |
+| `/clean-slate` | Kill all processes on dev ports, optionally restart |
+| `/guide` | Generate/update GUIDE.md — living "how to use" guide for the built app |
+
 ### Git Workflow
 | Command | Purpose |
 |---------|---------|
 | `/start-feature` | Create new feature branch |
 | `/code-review` | Review against engineering standards |
+
+---
+
+## Parallel Builds
+
+`BRANCH_STRATEGY=parallel` enables concurrent feature builds in separate git worktrees:
+
+```
+main ────────────────────────────────────────────────
+  │           │           │
+  ├── wt-a/  ├── wt-b/  ├── wt-c/     ← worktrees
+  │   build  │   build  │   build      ← concurrent agents
+  │   done✓  │   done✓  │   fail✗
+  └───────────┴───────────┘
+              │
+        merge + test (sequential)
+              │
+        integration branch
+```
+
+Configuration in `.env.local`:
+```bash
+BRANCH_STRATEGY=parallel
+PARALLEL_FEATURES=3          # max concurrent agents
+MERGE_STRATEGY=dependency    # merge in dependency order (or: fifo)
+```
+
+Merge conflict resolution:
+- Feature-specific files (specs, new source): merge cleanly
+- Shared append-only files (learnings, roadmap): auto-resolved
+- Auto-generated files (mapping.md): regenerated after merge
+- Source code conflicts: branch preserved, feature marked blocked
+
+---
+
+## Subagent Patterns
+
+When executing SDD commands, use subagents to parallelize independent work.
+
+### When to Fan Out
+
+| Command | What to parallelize |
+|---------|-------------------|
+| `/spec-first` | Load personas, design tokens, and search for existing spec simultaneously |
+| `/tdd` | Post-GREEN: run build check, lint check, and test check simultaneously |
+| `/build-next` | Context loading: read vision, personas, tokens, related specs, learnings in parallel |
+| `/check-coverage` | Check spec coverage, test coverage, and mapping consistency independently |
+| `/catch-drift` | Batch 3-5 specs per subagent instead of one at a time |
+| `/guide` | Read all feature specs, codebase files, and learnings in parallel batches |
+| `/ralph-run` | Pre-flight: validate CLI, check ports, read roadmap simultaneously |
+
+### When NOT to Fan Out
+
+- **Sequential dependencies**: Spec must complete before tests, tests before implementation
+- **Git operations**: Only one agent should touch git at a time
+- **Roadmap updates**: Single writer to avoid race conditions on roadmap.md
+- **Small tasks**: If total work is < 10 seconds, the overhead isn't worth it
+
+### Patterns
+
+**Parallel Reads Then Sequential Write:**
+1. Fan out: read personas, tokens, existing specs simultaneously
+2. Collect results
+3. Sequential: write the spec using all gathered context
+
+**Parallel Validation:**
+1. Agent completes implementation
+2. Fan out: run tests, build, lint simultaneously
+3. If all pass → continue. If any fail → fix sequentially (failures may be related)
+
+**Batch Processing** (drift-scan, doc-loop, check-coverage):
+1. Gather list of items
+2. Chunk into batches of PARALLEL_FEATURES (default: 3)
+3. Fan out: one subagent per chunk
+4. Collect and merge results
+
+`BRANCH_STRATEGY=parallel` handles script-level parallelism (multiple agent processes in worktrees). Within each agent process, use the patterns above for command-level parallelism.
 
 ---
 

@@ -340,6 +340,15 @@ Every feature build goes through a multi-stage pipeline. Each agent-based step r
 |---------|---------|
 | `/strip-specs` | Strip implementation details from specs for rebuilding in a new project |
 
+### Ralph Commands (Build Loop Management)
+
+| Command | Purpose |
+|---------|---------|
+| `/ralph-setup` | Interactive wizard: configure .env.local with auto-detection |
+| `/ralph-run` | Show roadmap status, kill dev servers, launch build loop |
+| `/clean-slate` | Kill all processes on dev ports, optionally restart dev server |
+| `/guide` | Generate/update GUIDE.md — living "how to use" guide for the built app |
+
 ### Maintenance
 
 | Command | Purpose |
@@ -654,6 +663,7 @@ Categories: `testing.md`, `performance.md`, `security.md`, `api.md`, `design.md`
 | `./scripts/overnight-autonomous.sh` | Full overnight automation (sync, triage, build, PRs) |
 | `./scripts/setup-overnight.sh` | Install launchd scheduled jobs |
 | `./scripts/uninstall-overnight.sh` | Remove launchd jobs |
+| `./scripts/clean-slate.sh` | Kill all processes on dev ports, optionally restart dev server |
 
 ### Build Loop Examples
 
@@ -674,6 +684,8 @@ SPEC_MODEL="opus-4.6-thinking" BUILD_MODEL="composer-1.5" ./scripts/build-loop-l
 BRANCH_STRATEGY=independent ./scripts/build-loop-local.sh   # Each feature isolated (worktrees)
 BRANCH_STRATEGY=both ./scripts/build-loop-local.sh         # Chained + independent rebuild
 BRANCH_STRATEGY=sequential ./scripts/build-loop-local.sh   # All features on current branch
+BRANCH_STRATEGY=parallel ./scripts/build-loop-local.sh    # Concurrent builds + merge (NEW)
+BRANCH_STRATEGY=parallel PARALLEL_FEATURES=5 ./scripts/build-loop-local.sh  # 5 concurrent agents
 
 # Base branch (default: current branch for build-loop, main for overnight)
 BASE_BRANCH=develop ./scripts/build-loop-local.sh

@@ -25,6 +25,11 @@
 #   - both: Run chained first (full build), then rebuild each feature
 #           independently from BASE_BRANCH (sequential, not parallel)
 #   - sequential: All features on one branch (original behavior)
+#   - parallel: Build multiple features simultaneously in separate worktrees
+#               Fans out up to PARALLEL_FEATURES concurrent agent processes,
+#               then merges results to an integration branch in MERGE_STRATEGY order.
+#               PARALLEL_FEATURES: max concurrent agents (default: 3)
+#               MERGE_STRATEGY: dependency (default) or fifo
 #
 # BUILD_CHECK_CMD: command to verify the build after each feature.
 #   Defaults to auto-detection (TypeScript → tsc, Python → pytest, etc.)
@@ -180,6 +185,8 @@ CLI_PROVIDER="${CLI_PROVIDER:-cursor}"
 MAX_FEATURES="${MAX_FEATURES:-50}"
 MAX_RETRIES="${MAX_RETRIES:-3}"
 BRANCH_STRATEGY="${BRANCH_STRATEGY:-chained}"
+PARALLEL_FEATURES="${PARALLEL_FEATURES:-3}"
+MERGE_STRATEGY="${MERGE_STRATEGY:-dependency}"
 DRIFT_CHECK="${DRIFT_CHECK:-true}"
 MAX_DRIFT_RETRIES="${MAX_DRIFT_RETRIES:-2}"
 POST_BUILD_STEPS="${POST_BUILD_STEPS:-test}"
@@ -226,8 +233,8 @@ SCRIPT_START=$(date +%s)
 cd "$PROJECT_DIR"
 
 # Validate BRANCH_STRATEGY
-if [[ ! "$BRANCH_STRATEGY" =~ ^(chained|independent|both|sequential)$ ]]; then
-    fail "Invalid BRANCH_STRATEGY: $BRANCH_STRATEGY (must be: chained, independent, both, or sequential)"
+if [[ ! "$BRANCH_STRATEGY" =~ ^(chained|independent|both|sequential|parallel)$ ]]; then
+    fail "Invalid BRANCH_STRATEGY: $BRANCH_STRATEGY (must be: chained, independent, both, sequential, or parallel)"
     exit 1
 fi
 
@@ -1479,6 +1486,386 @@ cleanup_all_worktrees() {
     fi
 }
 
+# ── Parallel build helpers ────────────────────────────────────────────────
+
+parse_ready_features() {
+    local roadmap_file="$PROJECT_DIR/.specs/roadmap.md"
+    if [ ! -f "$roadmap_file" ]; then
+        echo ""
+        return
+    fi
+
+    local completed_ids=""
+    local ready_features=""
+
+    while IFS= read -r line; do
+        [[ ! "$line" =~ ^\| ]] && continue
+        [[ "$line" =~ ^\|[[:space:]]*# ]] && continue
+        [[ "$line" =~ ^\|[[:space:]]*-+ ]] && continue
+
+        local id feature deps status
+        id=$(echo "$line" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/,"",$2); print $2}')
+        feature=$(echo "$line" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/,"",$3); print $3}')
+        deps=$(echo "$line" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/,"",$7); print $7}')
+        status=$(echo "$line" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/,"",$8); print $8}')
+
+        [[ -z "$id" || -z "$feature" ]] && continue
+
+        if [[ "$status" == *"✅"* ]]; then
+            completed_ids="$completed_ids $id"
+            continue
+        fi
+
+        [[ "$status" != *"⬜"* && "$status" != *"🔄"* ]] && continue
+
+        local deps_met=true
+        if [[ -n "$deps" && "$deps" != "-" ]]; then
+            IFS=',' read -ra dep_ids <<< "$deps"
+            for dep_id in "${dep_ids[@]}"; do
+                dep_id=$(echo "$dep_id" | tr -d '[:space:]')
+                if [[ ! " $completed_ids " =~ " $dep_id " ]]; then
+                    deps_met=false
+                    break
+                fi
+            done
+        fi
+
+        if [ "$deps_met" = true ]; then
+            ready_features="$ready_features|$feature"
+        fi
+    done < "$roadmap_file"
+
+    echo "${ready_features#|}"
+}
+
+build_feature_in_worktree() {
+    local feature_name="$1"
+    local worktree_path="$2"
+    local branch_name="$3"
+    local result_file="$4"
+
+    cd "$worktree_path"
+
+    local spec_prompt="
+Build the spec only for feature: $feature_name
+
+This is a parallel build from $MAIN_BRANCH — do not assume other features exist.
+
+1. Run /spec-first $feature_name (WITHOUT --full) — create or update the spec only
+2. Do NOT implement yet. Regenerate mapping: run ./scripts/generate-mapping.sh
+
+Output exactly one of:
+FEATURE_SPEC_READY: $feature_name
+SPEC_FILE: {path to .feature.md}
+SPEC_FAILED: {reason}
+"
+
+    local build_output
+    build_output=$(mktemp)
+
+    log "[parallel:$feature_name] Phase 1: Spec"
+    run_agent "$SPEC_MODEL" "$spec_prompt" 2>&1 | tee "$build_output" || true
+    local spec_result
+    spec_result=$(cat "$build_output")
+
+    if echo "$spec_result" | grep -q "FEATURE_SPEC_READY"; then
+        local spec_file
+        spec_file=$(echo "$spec_result" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | trim)
+        log "[parallel:$feature_name] Phase 2: Implement"
+        run_agent "$BUILD_MODEL" "$(implement_prompt "$feature_name" "${spec_file:-.specs/features/unknown.feature.md}")" 2>&1 | tee "$build_output" || true
+        local build_result
+        build_result=$(cat "$build_output")
+        rm -f "$build_output"
+
+        if echo "$build_result" | grep -q "FEATURE_BUILT"; then
+            local source_files
+            source_files=$(echo "$build_result" | grep "^SOURCE_FILES:" | tail -1 | cut -d: -f2- | trim)
+            spec_file=$(echo "$build_result" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | trim)
+
+            if [ "$REFACTOR" = "true" ]; then
+                log "[parallel:$feature_name] Phase 3: Refactor"
+                run_agent "$REFACTOR_MODEL" "$(refactor_prompt "$feature_name" "$spec_file" "$source_files")" 2>/dev/null || true
+            fi
+
+            echo "SUCCESS|$feature_name|$branch_name|$spec_file|$source_files" > "$result_file"
+            return 0
+        fi
+    fi
+
+    rm -f "$build_output"
+    echo "FAILED|$feature_name|$branch_name||" > "$result_file"
+    return 1
+}
+
+try_auto_resolve() {
+    local conflicted_files
+    conflicted_files=$(git diff --name-only --diff-filter=U 2>/dev/null)
+
+    [ -z "$conflicted_files" ] && return 0
+
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        case "$file" in
+            .specs/mapping.md)
+                git checkout --ours "$file" 2>/dev/null
+                ;;
+            .specs/roadmap.md)
+                git checkout --theirs "$file" 2>/dev/null
+                ;;
+            .specs/learnings/*)
+                git checkout --theirs "$file" 2>/dev/null
+                ;;
+            package.json|*/package.json)
+                git checkout --theirs "$file" 2>/dev/null
+                ;;
+            package-lock.json|*/package-lock.json|pnpm-lock.yaml|*/pnpm-lock.yaml)
+                git checkout --theirs "$file" 2>/dev/null
+                ;;
+            *)
+                warn "Cannot auto-resolve conflict in: $file"
+                return 1
+                ;;
+        esac
+        git add "$file" 2>/dev/null || return 1
+    done <<< "$conflicted_files"
+    return 0
+}
+
+run_parallel_loop() {
+    local ready_features_str
+    ready_features_str=$(parse_ready_features)
+
+    if [ -z "$ready_features_str" ]; then
+        log "No features ready to build"
+        LOOP_BUILT=0
+        LOOP_FAILED=0
+        return
+    fi
+
+    IFS='|' read -ra ALL_READY <<< "$ready_features_str"
+    local total_ready=${#ALL_READY[@]}
+    log "Found $total_ready features ready to build (parallelism: $PARALLEL_FEATURES)"
+
+    LOOP_BUILT=0
+    LOOP_FAILED=0
+    LOOP_TIMINGS=()
+
+    local features_started=0
+    local batch_num=0
+
+    while [ "$features_started" -lt "$total_ready" ] && [ "$features_started" -lt "$MAX_FEATURES" ]; do
+        batch_num=$((batch_num + 1))
+        local batch_size=$PARALLEL_FEATURES
+        local remaining=$((total_ready - features_started))
+        [ "$remaining" -lt "$batch_size" ] && batch_size=$remaining
+        local max_remaining=$((MAX_FEATURES - features_started))
+        [ "$max_remaining" -lt "$batch_size" ] && batch_size=$max_remaining
+
+        echo ""
+        echo "╔═══════════════════════════════════════════════════════════╗"
+        echo "║  PARALLEL BATCH $batch_num: $batch_size features                          ║"
+        echo "╚═══════════════════════════════════════════════════════════╝"
+        echo ""
+
+        local PIDS=()
+        local BRANCHES=()
+        local FEATURES=()
+        local RESULT_FILES=()
+        local WORKTREE_PATHS=()
+
+        for i in $(seq 0 $((batch_size - 1))); do
+            local idx=$((features_started + i))
+            local feature="${ALL_READY[$idx]}"
+            local safe_name
+            safe_name=$(echo "$feature" | tr ' :/' '-' | tr '[:upper:]' '[:lower:]')
+            local worktree_name="parallel-${safe_name}-$(date +%H%M%S)-$$-$i"
+            local worktree_path="$PROJECT_DIR/.build-worktrees/$worktree_name"
+            local branch_name="auto/parallel-${safe_name}"
+            local result_file
+            result_file=$(mktemp)
+
+            mkdir -p "$(dirname "$worktree_path")"
+            git branch -D "$branch_name" 2>/dev/null || true
+
+            if ! git worktree add -b "$branch_name" "$worktree_path" "$MAIN_BRANCH" 2>/dev/null; then
+                fail "Failed to create worktree for: $feature"
+                echo "FAILED|$feature|$branch_name||" > "$result_file"
+                RESULT_FILES+=("$result_file")
+                FEATURES+=("$feature")
+                BRANCHES+=("$branch_name")
+                WORKTREE_PATHS+=("$worktree_path")
+                continue
+            fi
+
+            success "Started: $feature (worktree: $worktree_name)"
+
+            (build_feature_in_worktree "$feature" "$worktree_path" "$branch_name" "$result_file") &
+            PIDS+=($!)
+            BRANCHES+=("$branch_name")
+            FEATURES+=("$feature")
+            RESULT_FILES+=("$result_file")
+            WORKTREE_PATHS+=("$worktree_path")
+        done
+
+        log "Waiting for ${#PIDS[@]} parallel agents to complete..."
+
+        local SUCCEEDED_BRANCHES=()
+        local SUCCEEDED_FEATURES=()
+        local SUCCEEDED_SPECS=()
+        local SUCCEEDED_SOURCES=()
+
+        for i in "${!PIDS[@]}"; do
+            local feature="${FEATURES[$i]}"
+            local start_time=$(date +%s)
+            wait "${PIDS[$i]}" 2>/dev/null || true
+            local end_time=$(date +%s)
+            local duration=$((end_time - start_time))
+
+            if [ -f "${RESULT_FILES[$i]}" ]; then
+                local result_line
+                result_line=$(cat "${RESULT_FILES[$i]}")
+                local result_status
+                result_status=$(echo "$result_line" | cut -d'|' -f1)
+
+                if [ "$result_status" = "SUCCESS" ]; then
+                    local r_branch r_spec r_sources
+                    r_branch=$(echo "$result_line" | cut -d'|' -f3)
+                    r_spec=$(echo "$result_line" | cut -d'|' -f4)
+                    r_sources=$(echo "$result_line" | cut -d'|' -f5)
+                    SUCCEEDED_BRANCHES+=("$r_branch")
+                    SUCCEEDED_FEATURES+=("$feature")
+                    SUCCEEDED_SPECS+=("$r_spec")
+                    SUCCEEDED_SOURCES+=("$r_sources")
+                    success "Completed: $feature ($(format_duration $duration))"
+                    LOOP_TIMINGS+=("✓ $feature: $(format_duration $duration)")
+                else
+                    fail "Failed: $feature ($(format_duration $duration))"
+                    LOOP_FAILED=$((LOOP_FAILED + 1))
+                    LOOP_TIMINGS+=("✗ $feature: $(format_duration $duration)")
+                fi
+            fi
+            rm -f "${RESULT_FILES[$i]}"
+        done
+
+        for wt in "${WORKTREE_PATHS[@]}"; do
+            if [ -d "$wt" ]; then
+                cd "$PROJECT_DIR"
+                git worktree remove "$wt" 2>/dev/null || true
+            fi
+        done
+
+        # ── Merge phase: collect results onto integration branch ──
+        if [ ${#SUCCEEDED_BRANCHES[@]} -gt 0 ]; then
+            cd "$PROJECT_DIR"
+
+            local integration_branch="auto/integration-$(date +%Y%m%d-%H%M%S)"
+            git checkout -b "$integration_branch" "$MAIN_BRANCH" 2>/dev/null || {
+                fail "Failed to create integration branch"
+                features_started=$((features_started + batch_size))
+                continue
+            }
+
+            log "Merging ${#SUCCEEDED_BRANCHES[@]} features onto $integration_branch..."
+
+            local merge_order=()
+            if [ "$MERGE_STRATEGY" = "dependency" ]; then
+                for idx in $(seq 0 $((${#SUCCEEDED_BRANCHES[@]} - 1))); do
+                    merge_order+=("$idx")
+                done
+            else
+                for idx in $(seq 0 $((${#SUCCEEDED_BRANCHES[@]} - 1))); do
+                    merge_order+=("$idx")
+                done
+            fi
+
+            for idx in "${merge_order[@]}"; do
+                local branch="${SUCCEEDED_BRANCHES[$idx]}"
+                local feature="${SUCCEEDED_FEATURES[$idx]}"
+                local spec="${SUCCEEDED_SPECS[$idx]}"
+                local sources="${SUCCEEDED_SOURCES[$idx]}"
+
+                log "Merging: $feature ($branch)"
+
+                if git merge "$branch" --no-edit 2>/dev/null; then
+                    success "Clean merge: $feature"
+
+                    local merge_ok=true
+                    if [ -n "$BUILD_CMD" ] && ! check_build; then
+                        warn "Build failed after merging $feature"
+                        merge_ok=false
+                    fi
+                    if [ "$merge_ok" = true ] && [ -n "$TEST_CMD" ] && ! check_tests; then
+                        warn "Tests failed after merging $feature"
+                        merge_ok=false
+                    fi
+
+                    if [ "$merge_ok" = true ]; then
+                        LOOP_BUILT=$((LOOP_BUILT + 1))
+                        BUILT_FEATURE_NAMES+=("$feature")
+                        mark_roadmap_status "$feature" "✅"
+                        success "Merged and verified: $feature"
+                    else
+                        warn "Reverting merge of $feature (broke build/tests)"
+                        git reset --hard HEAD~1 2>/dev/null || true
+                        LOOP_FAILED=$((LOOP_FAILED + 1))
+                        mark_roadmap_status "$feature" "⏸️"
+                        LOOP_TIMINGS+=("⚠ $feature: merged but broke build/tests")
+                    fi
+                else
+                    log "Conflict merging $feature — attempting auto-resolve..."
+                    if try_auto_resolve; then
+                        git commit --no-edit 2>/dev/null || {
+                            warn "Failed to commit auto-resolved merge for $feature"
+                            git merge --abort 2>/dev/null || git reset --hard HEAD 2>/dev/null || true
+                            LOOP_FAILED=$((LOOP_FAILED + 1))
+                            mark_roadmap_status "$feature" "⏸️"
+                            continue
+                        }
+
+                        local merge_ok=true
+                        if [ -n "$BUILD_CMD" ] && ! check_build; then merge_ok=false; fi
+                        if [ "$merge_ok" = true ] && [ -n "$TEST_CMD" ] && ! check_tests; then merge_ok=false; fi
+
+                        if [ "$merge_ok" = true ]; then
+                            LOOP_BUILT=$((LOOP_BUILT + 1))
+                            BUILT_FEATURE_NAMES+=("$feature")
+                            mark_roadmap_status "$feature" "✅"
+                            success "Auto-resolved and verified: $feature"
+                        else
+                            warn "Reverting auto-resolved merge of $feature (broke build/tests)"
+                            git reset --hard HEAD~1 2>/dev/null || true
+                            LOOP_FAILED=$((LOOP_FAILED + 1))
+                            mark_roadmap_status "$feature" "⏸️"
+                        fi
+                    else
+                        git merge --abort 2>/dev/null || true
+                        warn "Cannot auto-resolve conflicts for $feature — skipping (branch preserved: $branch)"
+                        LOOP_FAILED=$((LOOP_FAILED + 1))
+                        mark_roadmap_status "$feature" "⏸️"
+                    fi
+                fi
+            done
+
+            if [ -x "$PROJECT_DIR/scripts/generate-mapping.sh" ]; then
+                log "Regenerating mapping after merge..."
+                "$PROJECT_DIR/scripts/generate-mapping.sh" 2>/dev/null || true
+            fi
+
+            if [ "$LOOP_BUILT" -gt 0 ]; then
+                MAIN_BRANCH="$integration_branch"
+                success "Integration branch: $integration_branch ($LOOP_BUILT features merged)"
+            else
+                git checkout "$MAIN_BRANCH" 2>/dev/null || true
+                git branch -D "$integration_branch" 2>/dev/null || true
+            fi
+        fi
+
+        features_started=$((features_started + batch_size))
+    done
+
+    cleanup_all_worktrees
+}
+
 # ── Main ──────────────────────────────────────────────────────────────────
 
 show_cmd_status() {
@@ -1496,6 +1883,9 @@ echo "CLI provider: $CLI_PROVIDER"
 echo "Base branch: $MAIN_BRANCH"
 echo "Branch strategy: $BRANCH_STRATEGY"
 echo "Max features: $MAX_FEATURES | Max retries per feature: $MAX_RETRIES"
+if [ "$BRANCH_STRATEGY" = "parallel" ]; then
+    echo "Parallel: $PARALLEL_FEATURES concurrent | Merge strategy: $MERGE_STRATEGY"
+fi
 echo ""
 echo "Verification commands:"
 show_cmd_status "Build" "$BUILD_CMD" "BUILD_CHECK_CMD"
@@ -1703,6 +2093,49 @@ SPEC_FAILED: {reason}
     echo ""
     echo "  Total time: $(format_duration $total_elapsed)"
     echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    echo ""
+
+elif [ "$BRANCH_STRATEGY" = "parallel" ]; then
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # PARALLEL MODE: build features concurrently, then merge
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    echo ""
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║  PARALLEL MODE                                           ║"
+    echo "║  Concurrency: $PARALLEL_FEATURES | Merge: $MERGE_STRATEGY              ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
+    echo ""
+
+    run_parallel_loop
+
+    cd "$PROJECT_DIR"
+    cleanup_all_worktrees
+
+    local total_elapsed=$(( $(date +%s) - SCRIPT_START ))
+
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    success "PARALLEL COMPLETE (total: $(format_duration $total_elapsed))"
+    echo ""
+    echo "  Built: $LOOP_BUILT | Failed: $LOOP_FAILED"
+    echo ""
+    if [ ${#LOOP_TIMINGS[@]} -gt 0 ]; then
+        echo "  Per-feature timings:"
+        for t in "${LOOP_TIMINGS[@]}"; do
+            echo "    $t"
+        done
+        echo ""
+    fi
+    if [ ${#BUILT_FEATURE_NAMES[@]} -gt 0 ]; then
+        echo "  Successfully merged features:"
+        for fn in "${BUILT_FEATURE_NAMES[@]}"; do
+            echo "    ✓ $fn"
+        done
+        echo ""
+    fi
+    echo "  Total time: $(format_duration $total_elapsed)"
     echo "═══════════════════════════════════════════════════════════"
     echo ""
 
