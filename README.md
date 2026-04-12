@@ -684,7 +684,7 @@ SPEC_MODEL="opus-4.6-thinking" BUILD_MODEL="composer-1.5" ./scripts/build-loop-l
 BRANCH_STRATEGY=independent ./scripts/build-loop-local.sh   # Each feature isolated (worktrees)
 BRANCH_STRATEGY=both ./scripts/build-loop-local.sh         # Chained + independent rebuild
 BRANCH_STRATEGY=sequential ./scripts/build-loop-local.sh   # All features on current branch
-BRANCH_STRATEGY=parallel ./scripts/build-loop-local.sh    # Concurrent builds + merge (NEW)
+BRANCH_STRATEGY=parallel ./scripts/build-loop-local.sh    # Concurrent builds + merge + drift + compound
 BRANCH_STRATEGY=parallel PARALLEL_FEATURES=5 ./scripts/build-loop-local.sh  # 5 concurrent agents
 
 # Base branch (default: current branch for build-loop, main for overnight)

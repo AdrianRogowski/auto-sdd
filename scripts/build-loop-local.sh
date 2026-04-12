@@ -25,11 +25,12 @@
 #   - both: Run chained first (full build), then rebuild each feature
 #           independently from BASE_BRANCH (sequential, not parallel)
 #   - sequential: All features on one branch (original behavior)
-#   - parallel: Build multiple features simultaneously in separate worktrees
+#   - parallel: Build multiple features simultaneously in separate worktrees.
 #               Fans out up to PARALLEL_FEATURES concurrent agent processes,
-#               then merges results to an integration branch in MERGE_STRATEGY order.
+#               each running spec → implement → verify → refactor (with retries).
+#               Then merges results to an integration branch in roadmap order,
+#               running drift check + compound post-merge per feature.
 #               PARALLEL_FEATURES: max concurrent agents (default: 3)
-#               MERGE_STRATEGY: dependency (default) or fifo
 #
 # BUILD_CHECK_CMD: command to verify the build after each feature.
 #   Defaults to auto-detection (TypeScript → tsc, Python → pytest, etc.)
@@ -186,7 +187,6 @@ MAX_FEATURES="${MAX_FEATURES:-50}"
 MAX_RETRIES="${MAX_RETRIES:-3}"
 BRANCH_STRATEGY="${BRANCH_STRATEGY:-chained}"
 PARALLEL_FEATURES="${PARALLEL_FEATURES:-3}"
-MERGE_STRATEGY="${MERGE_STRATEGY:-dependency}"
 DRIFT_CHECK="${DRIFT_CHECK:-true}"
 MAX_DRIFT_RETRIES="${MAX_DRIFT_RETRIES:-2}"
 POST_BUILD_STEPS="${POST_BUILD_STEPS:-test}"
@@ -1486,6 +1486,19 @@ cleanup_all_worktrees() {
     fi
 }
 
+# Trap handler: kill background workers and clean up worktrees on unexpected exit
+cleanup_on_exit() {
+    local pids
+    pids=$(jobs -p 2>/dev/null)
+    if [ -n "$pids" ]; then
+        kill $pids 2>/dev/null || true
+        wait 2>/dev/null || true
+    fi
+    cd "$PROJECT_DIR" 2>/dev/null || true
+    cleanup_all_worktrees 2>/dev/null || true
+}
+trap cleanup_on_exit INT TERM
+
 # ── Parallel build helpers ────────────────────────────────────────────────
 
 parse_ready_features() {
@@ -1560,39 +1573,81 @@ SPEC_FILE: {path to .feature.md}
 SPEC_FAILED: {reason}
 "
 
-    local build_output
-    build_output=$(mktemp)
+    local attempt=0
+    while [ "$attempt" -le "$MAX_RETRIES" ]; do
+        if [ "$attempt" -gt 0 ]; then
+            log "[parallel:$feature_name] Retry $attempt/$MAX_RETRIES"
+        fi
 
-    log "[parallel:$feature_name] Phase 1: Spec"
-    run_agent "$SPEC_MODEL" "$spec_prompt" 2>&1 | tee "$build_output" || true
-    local spec_result
-    spec_result=$(cat "$build_output")
+        local build_output
+        build_output=$(mktemp)
 
-    if echo "$spec_result" | grep -q "FEATURE_SPEC_READY"; then
+        # Phase 1: Spec
+        log "[parallel:$feature_name] Phase 1: Spec"
+        run_agent "$SPEC_MODEL" "$spec_prompt" 2>&1 | tee "$build_output" || true
+        local spec_result
+        spec_result=$(cat "$build_output")
+
+        if ! echo "$spec_result" | grep -q "FEATURE_SPEC_READY"; then
+            rm -f "$build_output"
+            attempt=$((attempt + 1))
+            continue
+        fi
+
         local spec_file
         spec_file=$(echo "$spec_result" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | trim)
+
+        # Phase 2: Implement (RED -> GREEN)
         log "[parallel:$feature_name] Phase 2: Implement"
         run_agent "$BUILD_MODEL" "$(implement_prompt "$feature_name" "${spec_file:-.specs/features/unknown.feature.md}")" 2>&1 | tee "$build_output" || true
         local build_result
         build_result=$(cat "$build_output")
         rm -f "$build_output"
 
-        if echo "$build_result" | grep -q "FEATURE_BUILT"; then
-            local source_files
-            source_files=$(echo "$build_result" | grep "^SOURCE_FILES:" | tail -1 | cut -d: -f2- | trim)
-            spec_file=$(echo "$build_result" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | trim)
-
-            if [ "$REFACTOR" = "true" ]; then
-                log "[parallel:$feature_name] Phase 3: Refactor"
-                run_agent "$REFACTOR_MODEL" "$(refactor_prompt "$feature_name" "$spec_file" "$source_files")" 2>/dev/null || true
-            fi
-
-            echo "SUCCESS|$feature_name|$branch_name|$spec_file|$source_files" > "$result_file"
-            return 0
+        if ! echo "$build_result" | grep -q "FEATURE_BUILT"; then
+            attempt=$((attempt + 1))
+            continue
         fi
-    fi
 
-    rm -f "$build_output"
+        local source_files
+        source_files=$(echo "$build_result" | grep "^SOURCE_FILES:" | tail -1 | cut -d: -f2- | trim)
+        spec_file=$(echo "$build_result" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | trim)
+
+        # Pre-merge verification: build + tests must pass in the worktree
+        local phase_ok=true
+        if ! check_working_tree_clean; then
+            warn "[parallel:$feature_name] Agent left uncommitted changes"
+            phase_ok=false
+        elif [ -n "$BUILD_CMD" ] && ! check_build; then
+            warn "[parallel:$feature_name] Build check failed in worktree"
+            phase_ok=false
+        fi
+        if [ "$phase_ok" = true ] && [ -n "$TEST_CMD" ] && ! check_tests; then
+            warn "[parallel:$feature_name] Tests failed in worktree"
+            phase_ok=false
+        fi
+
+        if [ "$phase_ok" != true ]; then
+            attempt=$((attempt + 1))
+            continue
+        fi
+
+        # Phase 3: Refactor (with safe revert if it breaks things)
+        if [ "$REFACTOR" = "true" ]; then
+            log "[parallel:$feature_name] Phase 3: Refactor"
+            local pre_refactor_commit
+            pre_refactor_commit=$(git rev-parse HEAD)
+            run_agent "$REFACTOR_MODEL" "$(refactor_prompt "$feature_name" "$spec_file" "$source_files")" 2>/dev/null || true
+            if ([ -n "$BUILD_CMD" ] && ! check_build) || ([ -n "$TEST_CMD" ] && ! check_tests); then
+                warn "[parallel:$feature_name] Refactor broke build/tests — reverting"
+                git reset --hard "$pre_refactor_commit"
+            fi
+        fi
+
+        echo "SUCCESS|$feature_name|$branch_name|$spec_file|$source_files" > "$result_file"
+        return 0
+    done
+
     echo "FAILED|$feature_name|$branch_name||" > "$result_file"
     return 1
 }
@@ -1667,7 +1722,9 @@ run_parallel_loop() {
         echo "╚═══════════════════════════════════════════════════════════╝"
         echo ""
 
+        # Arrays kept in sync: only appended together for successfully launched workers
         local PIDS=()
+        local SPAWN_TIMES=()
         local BRANCHES=()
         local FEATURES=()
         local RESULT_FILES=()
@@ -1689,11 +1746,9 @@ run_parallel_loop() {
 
             if ! git worktree add -b "$branch_name" "$worktree_path" "$MAIN_BRANCH" 2>/dev/null; then
                 fail "Failed to create worktree for: $feature"
-                echo "FAILED|$feature|$branch_name||" > "$result_file"
-                RESULT_FILES+=("$result_file")
-                FEATURES+=("$feature")
-                BRANCHES+=("$branch_name")
-                WORKTREE_PATHS+=("$worktree_path")
+                LOOP_FAILED=$((LOOP_FAILED + 1))
+                LOOP_TIMINGS+=("✗ $feature: worktree creation failed")
+                rm -f "$result_file"
                 continue
             fi
 
@@ -1701,11 +1756,17 @@ run_parallel_loop() {
 
             (build_feature_in_worktree "$feature" "$worktree_path" "$branch_name" "$result_file") &
             PIDS+=($!)
+            SPAWN_TIMES+=($(date +%s))
             BRANCHES+=("$branch_name")
             FEATURES+=("$feature")
             RESULT_FILES+=("$result_file")
             WORKTREE_PATHS+=("$worktree_path")
         done
+
+        if [ ${#PIDS[@]} -eq 0 ]; then
+            features_started=$((features_started + batch_size))
+            continue
+        fi
 
         log "Waiting for ${#PIDS[@]} parallel agents to complete..."
 
@@ -1716,10 +1777,9 @@ run_parallel_loop() {
 
         for i in "${!PIDS[@]}"; do
             local feature="${FEATURES[$i]}"
-            local start_time=$(date +%s)
             wait "${PIDS[$i]}" 2>/dev/null || true
             local end_time=$(date +%s)
-            local duration=$((end_time - start_time))
+            local duration=$((end_time - ${SPAWN_TIMES[$i]}))
 
             if [ -f "${RESULT_FILES[$i]}" ]; then
                 local result_line
@@ -1737,12 +1797,16 @@ run_parallel_loop() {
                     SUCCEEDED_SPECS+=("$r_spec")
                     SUCCEEDED_SOURCES+=("$r_sources")
                     success "Completed: $feature ($(format_duration $duration))"
-                    LOOP_TIMINGS+=("✓ $feature: $(format_duration $duration)")
+                    LOOP_TIMINGS+=("✓ $feature: $(format_duration $duration) (build)")
                 else
                     fail "Failed: $feature ($(format_duration $duration))"
                     LOOP_FAILED=$((LOOP_FAILED + 1))
                     LOOP_TIMINGS+=("✗ $feature: $(format_duration $duration)")
                 fi
+            else
+                fail "No result file for: $feature"
+                LOOP_FAILED=$((LOOP_FAILED + 1))
+                LOOP_TIMINGS+=("✗ $feature: $(format_duration $duration) (no result)")
             fi
             rm -f "${RESULT_FILES[$i]}"
         done
@@ -1767,18 +1831,8 @@ run_parallel_loop() {
 
             log "Merging ${#SUCCEEDED_BRANCHES[@]} features onto $integration_branch..."
 
-            local merge_order=()
-            if [ "$MERGE_STRATEGY" = "dependency" ]; then
-                for idx in $(seq 0 $((${#SUCCEEDED_BRANCHES[@]} - 1))); do
-                    merge_order+=("$idx")
-                done
-            else
-                for idx in $(seq 0 $((${#SUCCEEDED_BRANCHES[@]} - 1))); do
-                    merge_order+=("$idx")
-                done
-            fi
-
-            for idx in "${merge_order[@]}"; do
+            # Merge in roadmap order (= array order, which follows parse_ready_features)
+            for idx in $(seq 0 $((${#SUCCEEDED_BRANCHES[@]} - 1))); do
                 local branch="${SUCCEEDED_BRANCHES[$idx]}"
                 local feature="${SUCCEEDED_FEATURES[$idx]}"
                 local spec="${SUCCEEDED_SPECS[$idx]}"
@@ -1786,31 +1840,10 @@ run_parallel_loop() {
 
                 log "Merging: $feature ($branch)"
 
+                local merged=false
                 if git merge "$branch" --no-edit 2>/dev/null; then
                     success "Clean merge: $feature"
-
-                    local merge_ok=true
-                    if [ -n "$BUILD_CMD" ] && ! check_build; then
-                        warn "Build failed after merging $feature"
-                        merge_ok=false
-                    fi
-                    if [ "$merge_ok" = true ] && [ -n "$TEST_CMD" ] && ! check_tests; then
-                        warn "Tests failed after merging $feature"
-                        merge_ok=false
-                    fi
-
-                    if [ "$merge_ok" = true ]; then
-                        LOOP_BUILT=$((LOOP_BUILT + 1))
-                        BUILT_FEATURE_NAMES+=("$feature")
-                        mark_roadmap_status "$feature" "✅"
-                        success "Merged and verified: $feature"
-                    else
-                        warn "Reverting merge of $feature (broke build/tests)"
-                        git reset --hard HEAD~1 2>/dev/null || true
-                        LOOP_FAILED=$((LOOP_FAILED + 1))
-                        mark_roadmap_status "$feature" "⏸️"
-                        LOOP_TIMINGS+=("⚠ $feature: merged but broke build/tests")
-                    fi
+                    merged=true
                 else
                     log "Conflict merging $feature — attempting auto-resolve..."
                     if try_auto_resolve; then
@@ -1821,29 +1854,71 @@ run_parallel_loop() {
                             mark_roadmap_status "$feature" "⏸️"
                             continue
                         }
-
-                        local merge_ok=true
-                        if [ -n "$BUILD_CMD" ] && ! check_build; then merge_ok=false; fi
-                        if [ "$merge_ok" = true ] && [ -n "$TEST_CMD" ] && ! check_tests; then merge_ok=false; fi
-
-                        if [ "$merge_ok" = true ]; then
-                            LOOP_BUILT=$((LOOP_BUILT + 1))
-                            BUILT_FEATURE_NAMES+=("$feature")
-                            mark_roadmap_status "$feature" "✅"
-                            success "Auto-resolved and verified: $feature"
-                        else
-                            warn "Reverting auto-resolved merge of $feature (broke build/tests)"
-                            git reset --hard HEAD~1 2>/dev/null || true
-                            LOOP_FAILED=$((LOOP_FAILED + 1))
-                            mark_roadmap_status "$feature" "⏸️"
-                        fi
+                        success "Auto-resolved merge: $feature"
+                        merged=true
                     else
                         git merge --abort 2>/dev/null || true
                         warn "Cannot auto-resolve conflicts for $feature — skipping (branch preserved: $branch)"
                         LOOP_FAILED=$((LOOP_FAILED + 1))
                         mark_roadmap_status "$feature" "⏸️"
+                        continue
                     fi
                 fi
+
+                if [ "$merged" != true ]; then
+                    continue
+                fi
+
+                # Post-merge verification: build + tests on integrated code
+                local merge_ok=true
+                if [ -n "$BUILD_CMD" ] && ! check_build; then
+                    warn "Build failed after merging $feature"
+                    merge_ok=false
+                fi
+                if [ "$merge_ok" = true ] && [ -n "$TEST_CMD" ] && ! check_tests; then
+                    warn "Tests failed after merging $feature"
+                    merge_ok=false
+                fi
+
+                if [ "$merge_ok" != true ]; then
+                    warn "Reverting merge of $feature (broke build/tests)"
+                    git reset --hard HEAD~1 2>/dev/null || true
+                    LOOP_FAILED=$((LOOP_FAILED + 1))
+                    mark_roadmap_status "$feature" "⏸️"
+                    LOOP_TIMINGS+=("⚠ $feature: merged but broke build/tests")
+                    continue
+                fi
+
+                # Post-merge Phase 4: Drift check (Layer 2 — fresh agent on integrated code)
+                local drift_ok=true
+                if [ "$DRIFT_CHECK" = "true" ] && [ -n "$spec" ]; then
+                    log "Post-merge drift check: $feature"
+                    if ! check_drift "$spec" "$sources"; then
+                        warn "Drift check failed after merge for $feature"
+                        drift_ok=false
+                    fi
+                fi
+
+                if [ "$drift_ok" != true ]; then
+                    warn "Reverting merge of $feature (unresolvable drift)"
+                    git reset --hard HEAD~1 2>/dev/null || true
+                    LOOP_FAILED=$((LOOP_FAILED + 1))
+                    mark_roadmap_status "$feature" "⏸️"
+                    LOOP_TIMINGS+=("⚠ $feature: merged but drift unresolvable")
+                    continue
+                fi
+
+                # Post-merge Phase 5: Compound (extract learnings)
+                if [ "$COMPOUND" = "true" ]; then
+                    log "Post-merge compound: $feature"
+                    run_agent "$COMPOUND_MODEL" "$(compound_prompt "$feature" "$spec" "$sources")" 2>/dev/null || true
+                fi
+
+                # All phases passed — feature is complete
+                LOOP_BUILT=$((LOOP_BUILT + 1))
+                BUILT_FEATURE_NAMES+=("$feature")
+                mark_roadmap_status "$feature" "✅"
+                success "Merged and verified: $feature"
             done
 
             if [ -x "$PROJECT_DIR/scripts/generate-mapping.sh" ]; then
@@ -1884,7 +1959,7 @@ echo "Base branch: $MAIN_BRANCH"
 echo "Branch strategy: $BRANCH_STRATEGY"
 echo "Max features: $MAX_FEATURES | Max retries per feature: $MAX_RETRIES"
 if [ "$BRANCH_STRATEGY" = "parallel" ]; then
-    echo "Parallel: $PARALLEL_FEATURES concurrent | Merge strategy: $MERGE_STRATEGY"
+    echo "Parallel: $PARALLEL_FEATURES concurrent | Merge: roadmap order | Post-merge: drift + compound"
 fi
 echo ""
 echo "Verification commands:"
@@ -2104,7 +2179,7 @@ elif [ "$BRANCH_STRATEGY" = "parallel" ]; then
     echo ""
     echo "╔═══════════════════════════════════════════════════════════╗"
     echo "║  PARALLEL MODE                                           ║"
-    echo "║  Concurrency: $PARALLEL_FEATURES | Merge: $MERGE_STRATEGY              ║"
+    echo "║  Concurrency: $PARALLEL_FEATURES | Post-merge: drift + compound        ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo ""
 

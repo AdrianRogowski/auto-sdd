@@ -469,17 +469,26 @@ Then [expected result]
 
 ## Parallel Builds
 
-`BRANCH_STRATEGY=parallel` enables concurrent feature builds in separate git worktrees:
+`BRANCH_STRATEGY=parallel` enables concurrent feature builds in separate git worktrees.
+Each worker runs the same pipeline as sequential mode (spec → implement → verify → refactor),
+then features merge to an integration branch with post-merge drift check + compound.
 
 ```
-main ────────────────────────────────────────────────
+main ────────────────────────────────────────────────────────
   │           │           │
-  ├── wt-a/  ├── wt-b/  ├── wt-c/     ← worktrees
-  │   build  │   build  │   build      ← concurrent agents
-  │   done✓  │   done✓  │   fail✗
+  ├── wt-a/  ├── wt-b/  ├── wt-c/          ← worktrees
+  │   spec   │   spec   │   spec            ← concurrent agents
+  │   impl   │   impl   │   impl
+  │   verify │   verify │   verify (build+test)
+  │   refac  │   refac  │   fail✗
+  │   done✓  │   done✓  │
   └───────────┴───────────┘
               │
-        merge + test (sequential)
+        merge each (roadmap order, sequential)
+         ├── build + test verify
+         ├── drift check (Layer 2)
+         ├── compound (learnings)
+         └── mark ✅
               │
         integration branch
 ```
@@ -488,7 +497,6 @@ Configuration in `.env.local`:
 ```bash
 BRANCH_STRATEGY=parallel
 PARALLEL_FEATURES=3          # max concurrent agents
-MERGE_STRATEGY=dependency    # merge in dependency order (or: fifo)
 ```
 
 Merge conflict resolution:
@@ -496,6 +504,7 @@ Merge conflict resolution:
 - Shared append-only files (learnings, roadmap): auto-resolved
 - Auto-generated files (mapping.md): regenerated after merge
 - Source code conflicts: branch preserved, feature marked blocked
+- Drift check catches semantic conflicts that merge cleanly but break spec alignment
 
 ---
 

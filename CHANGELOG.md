@@ -2,6 +2,26 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.3.2 — Fix Parallel Mode Quality Parity
+
+### Fixed
+- **Parallel mode skipped 3 of 5 pipeline phases** — Workers only ran spec → implement → refactor. Now runs the full pipeline: workers do spec → implement → verify (build+test) → refactor with retries, then post-merge runs drift check (Layer 2) + compound (learnings) per feature. Parallel `✅` now means the same quality gates as sequential.
+- **No retry logic in parallel workers** — Workers got one shot; `MAX_RETRIES` was silently ignored. Now retries up to `MAX_RETRIES` on spec/build/test failure, matching sequential mode.
+- **No pre-merge build/test verification** — Workers trusted the agent's `FEATURE_BUILT` signal without independently verifying. Now runs `check_build` + `check_tests` in each worktree before signaling success, so broken features are caught before the merge phase.
+- **Refactor had no safety net** — If refactor broke build/tests in a worker, the damage was permanent. Now saves pre-refactor commit and reverts with `git reset --hard` if verification fails.
+- **Duration tracking was wrong** — Measured `wait` time instead of actual build time. PID[1]'s duration was "(worker 1 time - worker 0 time)" and PID[2] was ≈0. Now records spawn time per worker and computes actual elapsed.
+- **Array misalignment on worktree failure** — When worktree creation failed, `PIDS` was shorter than `FEATURES`/`RESULT_FILES`, causing wrong feature names in success/failure reporting. Failed worktrees are now counted immediately without appending to the PID array.
+- **Missing result file not handled** — If a worker's temp file disappeared, the loop silently skipped it. Now reports failure explicitly.
+- **No cleanup on SIGINT/SIGTERM** — Background workers became orphans and worktrees persisted. Added trap handler that kills worker PIDs and removes worktrees on unexpected exit.
+
+### Removed
+- **`MERGE_STRATEGY` config** — Both `dependency` and `fifo` branches contained identical code (both used spawn order). Removed the config knob; merges always happen in roadmap order, which is the natural order from `parse_ready_features`.
+
+### Changed
+- **Roadmap `✅` only after all phases pass** — Previously marked complete after build+test, before drift/compound. Now marks `✅` only after merge verification + drift check + compound all succeed.
+- **CLAUDE.md** — Updated parallel builds diagram to show full pipeline (spec → impl → verify → refactor in workers, then merge → drift → compound sequentially).
+- **`.env.local.example`** — Removed `MERGE_STRATEGY`, updated parallel docs to describe actual pipeline.
+
 ## 2.3.1 — Fix Parallel Mode Roadmap Parsing
 
 ### Fixed
