@@ -2,6 +2,7 @@
 
 A framework for AI-assisted development that combines:
 - **Product Strategy** - Define business positioning before building (via `/strategy` command)
+- **Go-to-Market Pipeline** - Find channels, communities, and early users (via `/gtm` + `/find-early-users`)
 - **Spec-Driven Development (SDD)** - Define behavior before implementing
 - **Red-Green-Refactor TDD** - Failing tests → implement → clean up (via `/tdd` command)
 - **Constitutional Constraints** - Non-negotiable security/data rules enforced at spec time (via `/constitution`)
@@ -89,6 +90,8 @@ After installing, use the slash commands:
 
 ```
 /strategy "Sales prospect tool"    # Define business strategy (target customer, buying motion)
+/gtm                               # Create GTM playbook: channels, templates, launch timeline
+/find-early-users                  # Find specific people to talk to right now
 /vision "CRM for real estate"      # Define what you're building (reads strategy)
 /personas                          # Create user personas (reads strategy + vision)
 /constitution                      # Define security/data constraints (reads strategy + vision)
@@ -114,9 +117,27 @@ Before building features, set up the project-level infrastructure. Each step rea
   positioning, purpose,    patience,     error handling       driven colors,
   buying       users,      frustrations) constraints)         spacing,
   motion)      tech)                                          typography)
+     │
+     └──▶  /gtm  →  /find-early-users
+            │              │
+            ▼              ▼
+        gtm.md       prospects.md
+       (channels,    (specific people,
+        templates,    draft messages,
+        timeline)     threads to monitor)
 ```
 
 All are optional but improve every spec. `/spec-first` will note what's missing.
+
+#### Finding Product-Market Fit
+
+If you're still validating the problem, iterate on strategy + GTM before committing to vision:
+
+```
+/strategy → /gtm → /find-early-users → talk to people → /strategy (update) → repeat
+    ↓ (once stable)
+/vision → /personas → /roadmap → /build-next
+```
 
 ### Per Feature: Spec → Red-Green-Refactor TDD
 
@@ -320,6 +341,8 @@ Every feature build goes through a multi-stage pipeline. Each agent-based step r
 | Command | Purpose |
 |---------|---------|
 | `/strategy` | Define business strategy: target customer, buying motion, value prop, metrics |
+| `/gtm` | Create GTM playbook: channels, outreach templates, launch timeline (reads strategy) |
+| `/find-early-users` | Find specific people and conversations to reach out to right now |
 | `/vision` | Create or update vision.md from description, Jira, or Confluence (reads strategy) |
 | `/personas` | Create user personas (reads strategy + vision for target customer segment) |
 | `/constitution` | Define non-negotiable constraints: security, data handling, error patterns |
@@ -434,6 +457,9 @@ Unlike generic design token templates, `/design-tokens` derives a **tailored** s
 │   │   ├── primary.md      # Main user persona
 │   │   ├── anti-persona.md # Who you're NOT building for
 │   │   └── _template.md    # Template for new personas
+│   ├── gtm/                # Go-to-market (created by /gtm and /find-early-users)
+│   │   ├── gtm.md          # Channel playbook, templates, launch timeline
+│   │   └── prospects.md    # Specific people/conversations to reach out to
 │   ├── features/           # Feature specs (Gherkin + ASCII mockups)
 │   │   └── {domain}/
 │   │       └── {feature}.feature.md
@@ -766,23 +792,28 @@ git auto
 # 2. Define business strategy (optional but recommended)
 /strategy "Task management for small dev teams"
 
-# 3. Define what you're building
+# 3. Find early users (optional — validate before building)
+/gtm                         # Creates GTM playbook with channels + templates
+/find-early-users            # Finds specific people to talk to right now
+# ... talk to people, iterate on /strategy until stable ...
+
+# 4. Define what you're building
 /vision "A task management app for small teams with projects, labels, and due dates"
 
-# 4. Create personas, constraints, and design system
+# 5. Create personas, constraints, and design system
 /personas                    # Creates primary persona + anti-persona (reads strategy)
 /constitution                # Creates security/data constraints (reads strategy + vision)
 /design-tokens               # Derives personality-driven tokens from vision + personas
 
-# 5. Create the build plan
+# 6. Create the build plan
 /roadmap create              # Reads strategy for prioritization
 
-# 6. Build feature by feature
+# 7. Build feature by feature
 /build-next    # Builds feature #1 (spec uses persona vocabulary + design tokens)
 /build-next    # Builds feature #2
 # ...or let overnight automation handle it
 
-# 7. Check progress
+# 8. Check progress
 /roadmap status
 ```
 

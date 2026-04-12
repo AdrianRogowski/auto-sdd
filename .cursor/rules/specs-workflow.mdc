@@ -66,7 +66,34 @@ When the user says any of these, **invoke `/strategy`**:
 | "shape this" | Run `/strategy` |
 | "who are we selling to" | Run `/strategy` |
 | "business model" | Run `/strategy` |
-| "go to market", "GTM" | Run `/strategy` |
+
+When the user says any of these, **invoke `/gtm`**:
+
+| User says | Action |
+|-----------|--------|
+| "gtm playbook" | Run `/gtm` |
+| "marketing plan" | Run `/gtm` |
+| "how do we get users" | Run `/gtm` |
+| "distribution plan" | Run `/gtm` |
+| "growth plan" | Run `/gtm` |
+| "channel strategy" | Run `/gtm` |
+| "launch plan" | Run `/gtm` |
+| "outreach plan" | Run `/gtm` |
+
+When the user says any of these, **invoke `/find-early-users`**:
+
+| User says | Action |
+|-----------|--------|
+| "find early users" | Run `/find-early-users` |
+| "find users" | Run `/find-early-users` |
+| "find prospects" | Run `/find-early-users` |
+| "find people" | Run `/find-early-users` |
+| "who should I talk to" | Run `/find-early-users` |
+| "find beta testers" | Run `/find-early-users` |
+| "find feedback" | Run `/find-early-users` |
+| "prospect list" | Run `/find-early-users` |
+| "who's complaining about" | Run `/find-early-users` |
+| "find my first users" | Run `/find-early-users` |
 
 When the user says any of these, **invoke `/constitution`**:
 
@@ -98,6 +125,9 @@ If user includes "full", "auto", "no stops", or "don't pause":
 │   ├── secondary.md       # Second user type (if needed)
 │   ├── anti-persona.md    # Who you're NOT building for
 │   └── _template.md       # Template for new personas
+├── gtm/                   # Go-to-market (created by /gtm and /find-early-users)
+│   ├── gtm.md             # Channel playbook, templates, launch timeline
+│   └── prospects.md       # Specific people/conversations to reach out to
 ├── features/              # Gherkin specs with ASCII mockups
 │   └── {domain}/
 │       └── {feature}.feature.md
@@ -128,7 +158,7 @@ If user includes "full", "auto", "no stops", or "don't pause":
 These are project-level infrastructure created once and referenced by every feature:
 
 ```
-/strategy → creates .specs/strategy.md (business positioning, buying motion, metrics)
+/strategy → creates .specs/strategy.md (business positioning, buying motion, metrics, GTM sketch)
  │
  ├──▶ /vision → creates .specs/vision.md (reads strategy)
  │     │
@@ -139,10 +169,31 @@ These are project-level infrastructure created once and referenced by every feat
  │     └──▶ /design-tokens → creates .specs/design-system/tokens.md
  │          (reads vision + personas to derive personality + values)
  │
- └──▶ /roadmap → reads strategy for prioritization
+ ├──▶ /roadmap → reads strategy for prioritization
+ │
+ └──▶ /gtm → creates .specs/gtm.md (reads strategy → channels, templates, timeline)
+       │
+       └──▶ /find-early-users → creates .specs/gtm/prospects.md (specific people + conversations)
 ```
 
 All are optional but improve every spec that follows. `/spec-first` will note what's missing and still work without them.
+
+### Ordering: GTM vs Vision
+
+Both `/vision` and `/gtm` read strategy.md and can run independently. The **temporal order** depends on your situation:
+
+**Finding product-market fit** (greenfield, unvalidated idea): GTM before vision. Use `/gtm` and `/find-early-users` to validate the problem with real people. Iterate on `/strategy` until it stabilizes. *Then* write `/vision` grounded in what you learned.
+
+**Known product** (cloning an app, internal tool, experienced domain): Vision first. You already know what to build — go straight to `/vision`, then use `/gtm` for distribution.
+
+```
+PMF search:    /strategy → /gtm → /find-early-users → conversations → /strategy (update)
+                   ↓ (once stable)
+               /vision → /personas → /roadmap → build
+
+Known product: /strategy → /vision → /personas → /roadmap → build
+                   └──────→ /gtm → /find-early-users (in parallel)
+```
 
 ---
 
@@ -342,6 +393,13 @@ Then [expected result]
 | `/constitution` | Define non-negotiable project constraints | Before first feature (or anytime) |
 | `/design-tokens` | Create or update design tokens | Before first feature (or anytime) |
 
+### GTM Commands (Go-to-Market)
+
+| Command | Purpose |
+|---------|---------|
+| `/gtm` | Create GTM playbook: channels, outreach templates, launch timeline |
+| `/find-early-users` | Find specific people and conversations to reach out to right now |
+
 ### Core Workflow Commands
 
 | Command | Purpose |
@@ -445,6 +503,8 @@ New components/modules should get a 2-3 letter prefix.
 | Business strategy | `.specs/strategy.md` |
 | Project constitution | `.specs/constitution.md` |
 | User personas | `.specs/personas/*.md` |
+| GTM playbook | `.specs/gtm.md` |
+| Prospect list | `.specs/gtm/prospects.md` |
 | Feature specs | `.specs/features/{domain}/{feature}.feature.md` |
 | Test suite docs | `.specs/test-suites/{mirrors test directory}` |
 | Design tokens | `.specs/design-system/tokens.md` |

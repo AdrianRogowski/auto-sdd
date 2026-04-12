@@ -10,6 +10,14 @@ This project uses a spec-driven development workflow. Follow these rules in all 
 Project setup (once):
   /strategy → /vision → /personas → /constitution → /design-tokens
 
+GTM pipeline (from strategy):
+  /strategy (Phase 5: GTM sketch) → /gtm (full playbook) → /find-early-users (prospect list)
+
+Finding product-market fit (iterate before building):
+  /strategy → /gtm → /find-early-users → talk to people → /strategy (update) → repeat
+      ↓ (once stable)
+  /vision → /personas → /roadmap → /build-next
+
 Per feature (Red-Green-Refactor TDD):
   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
   │    SPEC      │ ──▶ │  RED (test)  │ ──▶ │ GREEN (impl) │ ──▶ │  REFACTOR    │
@@ -83,7 +91,34 @@ When the user says any of these, **invoke `/strategy`**:
 | "shape this" | Run `/strategy` |
 | "who are we selling to" | Run `/strategy` |
 | "business model" | Run `/strategy` |
-| "go to market", "GTM" | Run `/strategy` |
+
+When the user says any of these, **invoke `/gtm`**:
+
+| User says | Action |
+|-----------|--------|
+| "gtm playbook" | Run `/gtm` |
+| "marketing plan" | Run `/gtm` |
+| "how do we get users" | Run `/gtm` |
+| "distribution plan" | Run `/gtm` |
+| "growth plan" | Run `/gtm` |
+| "channel strategy" | Run `/gtm` |
+| "launch plan" | Run `/gtm` |
+| "outreach plan" | Run `/gtm` |
+
+When the user says any of these, **invoke `/find-early-users`**:
+
+| User says | Action |
+|-----------|--------|
+| "find early users" | Run `/find-early-users` |
+| "find users" | Run `/find-early-users` |
+| "find prospects" | Run `/find-early-users` |
+| "find people" | Run `/find-early-users` |
+| "who should I talk to" | Run `/find-early-users` |
+| "find beta testers" | Run `/find-early-users` |
+| "find feedback" | Run `/find-early-users` |
+| "prospect list" | Run `/find-early-users` |
+| "who's complaining about" | Run `/find-early-users` |
+| "find my first users" | Run `/find-early-users` |
 
 When the user says any of these, **invoke `/constitution`**:
 
@@ -117,6 +152,9 @@ If user includes "full", "auto", "no stops", or "don't pause":
 │   ├── secondary.md       # Second user type (if needed)
 │   ├── anti-persona.md    # Who you're NOT building for
 │   └── _template.md       # Template for new personas
+├── gtm/                   # Go-to-market (created by /gtm and /find-early-users)
+│   ├── gtm.md             # Channel playbook, templates, launch timeline
+│   └── prospects.md       # Specific people/conversations to reach out to
 ├── features/              # Gherkin specs with ASCII mockups
 │   └── {domain}/
 │       └── {feature}.feature.md
@@ -146,26 +184,49 @@ If user includes "full", "auto", "no stops", or "don't pause":
 These are created once and inform every feature. Each reads the output of the commands above it:
 
 ```
-/strategy        → .specs/strategy.md          (business positioning + model)
+/strategy        → .specs/strategy.md          (business positioning + model + GTM sketch)
     ↓
-/vision          → .specs/vision.md            (reads strategy)
-    ↓
-/personas        → .specs/personas/*.md        (reads strategy + vision)
-    ↓
-/constitution    → .specs/constitution.md      (reads strategy + vision)
-    ↓
-/design-tokens   → .specs/design-system/       (reads vision + personas)
+    ├──▶ /vision          → .specs/vision.md            (reads strategy)
+    │       ↓
+    │    /personas        → .specs/personas/*.md        (reads strategy + vision)
+    │       ↓
+    │    /constitution    → .specs/constitution.md      (reads strategy + vision)
+    │       ↓
+    │    /design-tokens   → .specs/design-system/       (reads vision + personas)
+    │
+    └──▶ /gtm             → .specs/gtm.md               (reads strategy → channels, templates, timeline)
+            ↓
+         /find-early-users → .specs/gtm/prospects.md    (reads strategy + gtm → specific people)
 ```
 
 | Command | Creates | Purpose |
 |---------|---------|---------|
-| `/strategy` | `.specs/strategy.md` | Business strategy: target customer, buying motion, value prop, success metrics |
+| `/strategy` | `.specs/strategy.md` | Business strategy: target customer, buying motion, value prop, success metrics, GTM sketch |
 | `/vision` | `.specs/vision.md` | App purpose, users, tech stack, design principles |
 | `/personas` | `.specs/personas/*.md` | Who uses this (vocabulary, patience, frustrations) |
 | `/constitution` | `.specs/constitution.md` | Non-negotiable constraints: security, data handling, error patterns |
 | `/design-tokens` | `.specs/design-system/tokens.md` | Personality-driven tokens derived from vision + personas |
+| `/gtm` | `.specs/gtm.md` | GTM playbook: channels, outreach templates, launch timeline |
+| `/find-early-users` | `.specs/gtm/prospects.md` | Specific people + conversations to reach out to now |
 
 All are optional but improve every spec. `/spec-first` will note what's missing.
+
+### Ordering: GTM vs Vision
+
+The setup commands branch from strategy in parallel — both `/vision` and `/gtm` read strategy.md. But the **temporal order** depends on your situation:
+
+**Finding product-market fit** (greenfield, unvalidated idea): GTM before vision. Use `/gtm` and `/find-early-users` to validate the problem with real people. Iterate on `/strategy` until it stabilizes. *Then* write `/vision` grounded in what you learned.
+
+**Known product** (cloning an app, internal tool, experienced domain): Vision first. You already know what to build — go straight to `/vision`, then use `/gtm` to figure out distribution.
+
+```
+PMF search:    /strategy → /gtm → /find-early-users → conversations → /strategy (update)
+                   ↓ (once stable)
+               /vision → /personas → /roadmap → build
+
+Known product: /strategy → /vision → /personas → /roadmap → build
+                   └──────→ /gtm → /find-early-users (in parallel)
+```
 
 ---
 
@@ -191,6 +252,26 @@ Business strategy lives in `.specs/strategy.md` and is read by `/vision`, `/pers
 - `/constitution` reads strategy to determine constraint weight (enterprise = heavier security)
 
 Strategy is optional. Projects without it (internal tools, prototypes, learning exercises) skip directly to `/vision`.
+
+---
+
+## GTM Pipeline
+
+Go-to-market planning flows from strategy through increasingly concrete steps:
+
+```
+/strategy (Phase 5: GTM Sketch — automatic, lightweight)
+    ↓
+/gtm → .specs/gtm.md (full playbook: channels, templates, timeline)
+    ↓
+/find-early-users → .specs/gtm/prospects.md (specific people + draft messages)
+```
+
+**`/gtm`** reads strategy.md and uses WebSearch to find specific channels, communities, and content opportunities. Outputs a prioritized channel map, outreach templates (community post, cold DM, feedback request), and a 30-day launch timeline.
+
+**`/find-early-users`** reads strategy.md (and optionally gtm.md) and searches the live web for people who are publicly expressing the problem you're solving. Outputs a scored prospect list with links, pain signals, and personalized draft messages.
+
+Both commands use WebSearch for real-time research — results are current, not generic advice.
 
 ---
 
@@ -516,6 +597,12 @@ Then [expected result]
 | `/spec-first --full` | Create/update spec AND build without pauses (full Red-Green-Refactor cycle) |
 | `/tdd` | Run the Red-Green-Refactor cycle from an approved spec |
 
+### GTM (Go-to-Market)
+| Command | Purpose |
+|---------|---------|
+| `/gtm` | Create GTM playbook: channels, templates, launch timeline (reads strategy.md) |
+| `/find-early-users` | Find specific people and conversations to reach out to right now |
+
 ### Core Workflow
 | Command | Purpose |
 |---------|---------|
@@ -688,6 +775,8 @@ When working with specs, always tell the user:
 | App vision | `.specs/vision.md` |
 | Build roadmap | `.specs/roadmap.md` |
 | User personas | `.specs/personas/*.md` |
+| GTM playbook | `.specs/gtm.md` |
+| Prospect list | `.specs/gtm/prospects.md` |
 | Feature specs | `.specs/features/{domain}/{feature}.feature.md` |
 | Test suite docs | `.specs/test-suites/{mirrors test dir}` |
 | Design tokens | `.specs/design-system/tokens.md` |

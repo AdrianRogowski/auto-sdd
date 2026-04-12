@@ -2,6 +2,23 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.5.0 — GTM Pipeline: Go-to-Market Planning & Early User Discovery
+
+### New
+- **`/gtm` command** — Create an actionable go-to-market playbook from strategy.md. Uses WebSearch to find specific channels, communities, and content opportunities where the target customer is active. Outputs `.specs/gtm.md` with tiered channel map, outreach templates (community post, cold DM, feedback request), messaging framework, and 30-day launch timeline with checkboxes. Supports Create, Update, and `--refresh` modes. Available in both Cursor and Claude Code.
+- **`/find-early-users` command** — Find specific people, companies, and conversations to reach out to for early feedback. Reads strategy.md, constructs search queries from problem statement and competitor names, then uses WebSearch to find people publicly expressing the pain you're solving — Reddit threads, Twitter complaints, HN discussions, G2 reviews, job postings. Outputs `.specs/gtm/prospects.md` with scored prospect list, draft outreach messages, threads to monitor, and communities to join. Supports `--channel [channel]` for focused deep dives. Available in both Cursor and Claude Code.
+- **Phase 5: GTM Sketch in `/strategy`** — After writing strategy.md, `/strategy` now automatically appends a lightweight GTM sketch: primary channels based on buying motion, secondary channels for after first 10 users, and a first-10-users action plan. Points to `/gtm` and `/find-early-users` for going deeper.
+- **PMF search workflow** — New documented workflow for finding product-market fit: iterate on `/strategy` → `/gtm` → `/find-early-users` → conversations → `/strategy (update)` before committing to `/vision`. Explicit guidance on when to stay in strategy iteration vs move to vision.
+- **Natural language triggers** for new commands: "gtm playbook", "marketing plan", "how do we get users", "launch plan", "find early users", "find prospects", "who should I talk to", "find beta testers", "prospect list", etc.
+- **`.specs/gtm/` directory** — New directory for go-to-market artifacts: `gtm.md` (playbook) and `prospects.md` (prospect list).
+
+### Changed
+- **"go to market" / "GTM" triggers** now route to `/gtm` instead of `/strategy` (dedicated command exists now).
+- **`/strategy` "After Saving" message** — Now includes GTM sketch summary and recommends `/gtm` and `/find-early-users` as next steps.
+- **CLAUDE.md** — GTM pipeline section, PMF vs known-product ordering guidance, updated project setup flow diagram with GTM branch, new command triggers, updated directory structure and file locations.
+- **`.cursor/rules/specs-workflow.mdc`** — GTM command triggers, updated setup flow, directory structure, command tables, file locations.
+- **README.md** — GTM commands in setup flow, command tables, directory structure, and quick start examples.
+
 ## 2.4.0 — Product Strategy & Constitutional Constraints
 
 ### New

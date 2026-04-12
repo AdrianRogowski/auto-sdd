@@ -232,6 +232,67 @@ After decisions are made, write `.specs/strategy.md` with this structure:
 
 ---
 
+## Phase 5: GTM Sketch
+
+*Goal: bridge strategy to action. Don't just document who we're selling to — sketch how to reach them.*
+
+This phase runs automatically after saving strategy.md. It adds a `## GTM Sketch` section to the bottom of strategy.md. Keep it lightweight — `/gtm` will expand it into a full playbook.
+
+### Based on buying motion, suggest channels:
+
+**Bottom-up / PLG:**
+- Developer communities (Reddit, HN, Dev.to, specific subreddits)
+- Twitter/X (developer influencers, hashtags)
+- Open source / free tier as acquisition channel
+- Content marketing (blog posts solving the pain from Phase 1)
+- ProductHunt / Show HN launch
+
+**Top-down enterprise:**
+- LinkedIn outreach to decision-makers
+- Industry conferences and events
+- Case studies and ROI calculators
+- Partner/integration ecosystem
+- Warm introductions via investors/advisors
+
+**Self-serve:**
+- SEO for problem-keyword searches
+- Comparison pages (vs Competitor X)
+- Integration marketplaces (Zapier, app stores)
+- Affiliate/referral programs
+
+**Hybrid:**
+- Combine PLG acquisition with sales-assisted expansion
+- Community-led growth → enterprise upsell
+
+### For each recommended channel, provide:
+
+1. **Why this channel** — one sentence connecting it to the target customer from Phase 1
+2. **Where specifically** — not "Reddit" but "r/SaaS, r/startups, r/[industry]"; not "Twitter" but "@specific_accounts, #specific_hashtags"
+3. **What to say** — a draft message/post tailored to persona vocabulary (if personas exist)
+
+### Add to strategy.md:
+
+```markdown
+## GTM Sketch
+
+**Primary channels** (start here):
+1. [Channel] — [why, where specifically]
+2. [Channel] — [why, where specifically]
+
+**Secondary channels** (after first 10 users):
+3. [Channel] — [why, where specifically]
+
+**First 10 users plan**:
+- [ ] [Specific action 1 — e.g. "Post in r/SaaS asking for feedback on the problem"]
+- [ ] [Specific action 2 — e.g. "DM 5 people who complained about X in this thread: [link]"]
+- [ ] [Specific action 3]
+
+> Run `/gtm` for a full playbook with templates, timeline, and community map.
+> Run `/find-early-users` to search for specific people and conversations right now.
+```
+
+---
+
 ## After Saving
 
 Show the strategy summary and recommend next steps:
@@ -245,10 +306,16 @@ Key decisions:
 - Model: [revenue model]
 - Differentiator: [key differentiator]
 
+GTM sketch:
+- Primary channels: [channels]
+- First 10 users: [plan summary]
+
 Next steps:
 - Run /vision to define the product (will read strategy.md)
 - Run /personas to define users (will read strategy.md)
 - Run /roadmap to plan features (will read strategy.md)
+- Run /gtm for a full go-to-market playbook
+- Run /find-early-users to find specific people to talk to right now
 ```
 
 ---
@@ -304,5 +371,3 @@ These phrases should invoke `/strategy`:
 | "shape this" | Run `/strategy` |
 | "who are we selling to" | Run `/strategy` |
 | "business model" | Run `/strategy` |
-| "go to market" | Run `/strategy` |
-| "GTM" | Run `/strategy` |
