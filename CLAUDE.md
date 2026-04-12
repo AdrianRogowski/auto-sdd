@@ -8,7 +8,7 @@ This project uses a spec-driven development workflow. Follow these rules in all 
 
 ```
 Project setup (once):
-  /vision → /personas → /design-tokens
+  /strategy → /vision → /personas → /constitution → /design-tokens
 
 Per feature (Red-Green-Refactor TDD):
   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
@@ -73,6 +73,29 @@ When the user says any of these, **invoke the corresponding ralph/utility comman
 | "clean slate", "kill everything", "restart everything", "nuke localhost" | Run `/clean-slate` |
 | "generate guide", "update guide", "how to use guide" | Run `/guide` |
 
+When the user says any of these, **invoke `/strategy`**:
+
+| User says | Action |
+|-----------|--------|
+| "strategy" | Run `/strategy` |
+| "product strategy" | Run `/strategy` |
+| "business strategy" | Run `/strategy` |
+| "shape this" | Run `/strategy` |
+| "who are we selling to" | Run `/strategy` |
+| "business model" | Run `/strategy` |
+| "go to market", "GTM" | Run `/strategy` |
+
+When the user says any of these, **invoke `/constitution`**:
+
+| User says | Action |
+|-----------|--------|
+| "constitution" | Run `/constitution` |
+| "project constraints" | Run `/constitution` |
+| "security rules" | Run `/constitution` |
+| "invariants" | Run `/constitution` |
+| "non-negotiables" | Run `/constitution` |
+| "audit specs" | Run `/constitution --audit` |
+
 ### Full Mode Triggers
 
 If user includes "full", "auto", "no stops", or "don't pause":
@@ -85,6 +108,8 @@ If user includes "full", "auto", "no stops", or "don't pause":
 
 ```
 .specs/
+├── strategy.md            # Business strategy (created by /strategy)
+├── constitution.md        # Non-negotiable constraints (created by /constitution)
 ├── vision.md              # App vision (created by /vision or /clone-app)
 ├── roadmap.md             # Feature roadmap (single source of truth)
 ├── personas/              # User personas (inform every spec)
@@ -118,15 +143,72 @@ If user includes "full", "auto", "no stops", or "don't pause":
 
 ## Project Setup (Once)
 
-These are created once and inform every feature:
+These are created once and inform every feature. Each reads the output of the commands above it:
+
+```
+/strategy        → .specs/strategy.md          (business positioning + model)
+    ↓
+/vision          → .specs/vision.md            (reads strategy)
+    ↓
+/personas        → .specs/personas/*.md        (reads strategy + vision)
+    ↓
+/constitution    → .specs/constitution.md      (reads strategy + vision)
+    ↓
+/design-tokens   → .specs/design-system/       (reads vision + personas)
+```
 
 | Command | Creates | Purpose |
 |---------|---------|---------|
+| `/strategy` | `.specs/strategy.md` | Business strategy: target customer, buying motion, value prop, success metrics |
 | `/vision` | `.specs/vision.md` | App purpose, users, tech stack, design principles |
 | `/personas` | `.specs/personas/*.md` | Who uses this (vocabulary, patience, frustrations) |
+| `/constitution` | `.specs/constitution.md` | Non-negotiable constraints: security, data handling, error patterns |
 | `/design-tokens` | `.specs/design-system/tokens.md` | Personality-driven tokens derived from vision + personas |
 
-All three are optional but improve every spec. `/spec-first` will note what's missing.
+All are optional but improve every spec. `/spec-first` will note what's missing.
+
+---
+
+## Strategy
+
+Business strategy lives in `.specs/strategy.md` and is read by `/vision`, `/personas`, `/roadmap`, and `/spec-first`.
+
+**What it contains:**
+- **Problem** — what pain exists, who has it, how they cope today
+- **Target customer** — specific segment, who pays, anti-segment
+- **Buying motion** — bottom-up PLG, top-down enterprise, self-serve, or hybrid
+- **Value proposition** — the one-liner, aha moment, time-to-value
+- **Differentiation** — why this vs existing solutions
+- **Business model** — revenue model, price intuition, expansion path
+- **Success metrics** — what to measure at 1, 6, and 12 months
+- **Anti-goals** — what we're explicitly NOT building
+
+**How it's used:**
+- `/vision` reads strategy to ground the product description in business decisions
+- `/personas` reads strategy to determine who the personas are (target segment → primary persona)
+- `/roadmap` reads strategy to prioritize features by business value and buying motion fit
+- `/spec-first` reads strategy and adds a Strategy Alignment section to every spec
+- `/constitution` reads strategy to determine constraint weight (enterprise = heavier security)
+
+Strategy is optional. Projects without it (internal tools, prototypes, learning exercises) skip directly to `/vision`.
+
+---
+
+## Constitution
+
+Project-wide invariants live in `.specs/constitution.md` and are read by `/spec-first`.
+
+**What it contains:**
+- Non-negotiable security, data handling, API, error handling, and dependency rules
+- Rules are verifiable (an agent can check compliance), not vague aspirations
+- Tailored to the project's tech stack and strategy — generated by `/constitution`, not copied from a template
+
+**How it's used:**
+- `/spec-first` reads the constitution and adds a **Constitutional Compliance** section to every spec
+- Each spec must mark which rules apply, which are N/A, and flag any that can't be satisfied
+- `/constitution --audit` scans all specs for compliance sections
+
+Constitution is optional but recommended for any project intended for real users.
 
 ---
 
@@ -209,13 +291,15 @@ If ASCII mockup references a component that doesn't exist in `.specs/design-syst
 
 ### What happens in the SPEC step:
 
-1. **Load context** — Read personas and design tokens
+1. **Load context** — Read strategy, constitution, personas, design tokens, learnings index
 2. **Write Gherkin** — Scenarios using persona vocabulary, matching patience level
 3. **Write mockup** — ASCII art referencing design tokens
-4. **Add user journey** — Where this feature fits in the user's flow
-5. **Persona revision** — Re-read through persona's eyes, revise, note changes
-6. **Create component stubs** — For any new UI components
-7. **Pause** — Show spec + revision notes, ask "Run `/tdd` when ready"
+4. **Add strategy alignment** — How this feature supports the business strategy (if strategy.md exists)
+5. **Add constitutional compliance** — Which constraints apply and how they're addressed (if constitution.md exists)
+6. **Add user journey** — Where this feature fits in the user's flow
+7. **Persona revision** — Re-read through persona's eyes, revise, note changes
+8. **Create component stubs** — For any new UI components
+9. **Pause** — Show spec + revision notes, ask "Run `/tdd` when ready"
 
 ### What happens in the /tdd step (Red-Green-Refactor):
 
@@ -228,12 +312,13 @@ If ASCII mockup references a component that doesn't exist in `.specs/design-syst
 
 ### For New Features
 1. Run `/spec-first {feature}` — it will CREATE a spec if none exists
-2. Loads personas and design tokens before writing
+2. Loads strategy, constitution, personas, design tokens, and learnings before writing
 3. Writes Gherkin using persona vocabulary
 4. Creates ASCII mockup referencing design tokens
-5. Adds user journey (where this feature fits in the flow)
-6. Runs persona revision pass, notes changes
-7. **STOP for approval** — "Run `/tdd` when ready" (unless `--full`)
+5. Adds strategy alignment and constitutional compliance (if those files exist)
+6. Adds user journey (where this feature fits in the flow)
+7. Runs persona revision pass, notes changes
+8. **STOP for approval** — "Run `/tdd` when ready" (unless `--full`)
 8. Run `/tdd` — full Red-Green-Refactor cycle:
    - RED: Write failing tests
    - GREEN: Implement until tests pass
@@ -354,6 +439,21 @@ Then [expected result]
 2. **[This feature]**
 3. [Where user goes next]
 
+## Strategy Alignment
+
+<!-- Included when .specs/strategy.md exists -->
+- **Target segment**: [from strategy]
+- **Buying motion fit**: [how this supports the buying motion]
+- **Success metric**: [which strategy metric this moves]
+
+## Constitutional Compliance
+
+<!-- Included when .specs/constitution.md exists -->
+
+| Rule | Applies | Status |
+|------|---------|--------|
+| [Rule] | ✅ / N/A / ⚠️ | [How addressed] |
+
 ## UI Mockup
 
 (ASCII art referencing design tokens, using persona vocabulary)
@@ -406,11 +506,13 @@ Then [expected result]
 ### Setup
 | Command | Purpose |
 |---------|---------|
+| `/strategy` | Define business strategy: target customer, buying motion, value prop, metrics |
 | `/spec-init` | Discover codebase structure, create doc-queue.md (discovery only) |
-| `/vision` | Create or update vision.md |
-| `/personas` | Create or update user personas |
+| `/vision` | Create or update vision.md (reads strategy.md) |
+| `/personas` | Create or update user personas (reads strategy.md) |
+| `/constitution` | Define non-negotiable constraints: security, data, error handling |
 | `/design-tokens` | Create or update design tokens (personality-driven) |
-| `/spec-first` | Create or update spec + mockup (auto-detects create vs update) |
+| `/spec-first` | Create or update spec + mockup (reads strategy + constitution) |
 | `/spec-first --full` | Create/update spec AND build without pauses (full Red-Green-Refactor cycle) |
 | `/tdd` | Run the Red-Green-Refactor cycle from an approved spec |
 
@@ -516,9 +618,9 @@ When executing SDD commands, use subagents to parallelize independent work.
 
 | Command | What to parallelize |
 |---------|-------------------|
-| `/spec-first` | Load personas, design tokens, and search for existing spec simultaneously |
+| `/spec-first` | Load strategy, constitution, personas, design tokens, learnings, and search for existing spec simultaneously |
 | `/tdd` | Post-GREEN: run build check, lint check, and test check simultaneously |
-| `/build-next` | Context loading: read vision, personas, tokens, related specs, learnings in parallel |
+| `/build-next` | Context loading: read strategy, vision, personas, constitution, tokens, related specs, learnings in parallel |
 | `/check-coverage` | Check spec coverage, test coverage, and mapping consistency independently |
 | `/catch-drift` | Batch 3-5 specs per subagent instead of one at a time |
 | `/guide` | Read all feature specs, codebase files, and learnings in parallel batches |
@@ -534,7 +636,7 @@ When executing SDD commands, use subagents to parallelize independent work.
 ### Patterns
 
 **Parallel Reads Then Sequential Write:**
-1. Fan out: read personas, tokens, existing specs simultaneously
+1. Fan out: read strategy, constitution, personas, tokens, learnings, existing specs simultaneously
 2. Collect results
 3. Sequential: write the spec using all gathered context
 
@@ -581,6 +683,8 @@ When working with specs, always tell the user:
 
 | Type | Location |
 |------|----------|
+| Business strategy | `.specs/strategy.md` |
+| Project constitution | `.specs/constitution.md` |
 | App vision | `.specs/vision.md` |
 | Build roadmap | `.specs/roadmap.md` |
 | User personas | `.specs/personas/*.md` |
@@ -684,10 +788,12 @@ Status symbols:
 
 ### Building from Roadmap
 
-1. `/vision` or `/clone-app` creates vision.md
-2. `/personas` creates persona files (from vision's target users)
-3. `/design-tokens` creates personality-driven tokens (from vision + personas)
-4. `/roadmap` or `/clone-app` creates roadmap.md
+1. `/strategy` creates strategy.md (business positioning — optional but recommended)
+2. `/vision` or `/clone-app` creates vision.md (reads strategy)
+3. `/personas` creates persona files (reads strategy + vision)
+4. `/constitution` creates constitution.md (reads strategy + vision)
+5. `/design-tokens` creates personality-driven tokens (from vision + personas)
+6. `/roadmap` or `/clone-app` creates roadmap.md (reads strategy for prioritization)
 5. `/build-next` picks next pending feature (deps met)
 6. Build loop runs per feature:
    - Phase 1: Spec agent (creates spec)

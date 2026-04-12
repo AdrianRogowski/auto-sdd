@@ -1,8 +1,10 @@
 # SDD: Spec-Driven Development + Compound Learning
 
 A framework for AI-assisted development that combines:
+- **Product Strategy** - Define business positioning before building (via `/strategy` command)
 - **Spec-Driven Development (SDD)** - Define behavior before implementing
 - **Red-Green-Refactor TDD** - Failing tests → implement → clean up (via `/tdd` command)
+- **Constitutional Constraints** - Non-negotiable security/data rules enforced at spec time (via `/constitution`)
 - **User Personas** - Specs are written in users' language, scoped to their patience
 - **Personality-Driven Design** - Design system derived from vision, not generic templates
 - **Compound Learning** - Agent gets smarter from every session
@@ -86,12 +88,14 @@ nano .env.local
 After installing, use the slash commands:
 
 ```
-/vision "CRM for real estate"      # Define what you're building
-/personas                          # Create user personas (vocabulary, patience, frustrations)
+/strategy "Sales prospect tool"    # Define business strategy (target customer, buying motion)
+/vision "CRM for real estate"      # Define what you're building (reads strategy)
+/personas                          # Create user personas (reads strategy + vision)
+/constitution                      # Define security/data constraints (reads strategy + vision)
 /design-tokens                     # Create personality-driven design system
-/spec-first user authentication    # Create a feature spec (informed by personas + tokens)
+/spec-first user authentication    # Create a feature spec (reads strategy + constitution + personas + tokens)
 /tdd                               # Build it: RED → GREEN → REFACTOR → COMPOUND
-/roadmap create                    # Create a roadmap from the vision
+/roadmap create                    # Create a roadmap from the vision (reads strategy for prioritization)
 /build-next                        # Build next feature from roadmap
 ```
 
@@ -102,16 +106,17 @@ After installing, use the slash commands:
 Before building features, set up the project-level infrastructure. Each step reads the output of the previous:
 
 ```
-/vision "description"  →  /personas  →  /design-tokens
-     │                        │               │
-     ▼                        ▼               ▼
- vision.md              personas/         tokens.md
- (app purpose,          (vocabulary,      (personality-driven
-  users, tech)           patience,         colors, spacing,
-                         frustrations)     typography)
+/strategy  →  /vision  →  /personas  →  /constitution  →  /design-tokens
+     │             │            │              │                  │
+     ▼             ▼            ▼              ▼                  ▼
+ strategy.md  vision.md   personas/     constitution.md      tokens.md
+ (business    (app        (vocabulary,  (security, data,     (personality-
+  positioning, purpose,    patience,     error handling       driven colors,
+  buying       users,      frustrations) constraints)         spacing,
+  motion)      tech)                                          typography)
 ```
 
-All three are optional but improve every spec. `/spec-first` will note what's missing.
+All are optional but improve every spec. `/spec-first` will note what's missing.
 
 ### Per Feature: Spec → Red-Green-Refactor TDD
 
@@ -120,7 +125,9 @@ All three are optional but improve every spec. `/spec-first` will note what's mi
 │    SPEC      │ ──▶ │  RED (test)  │ ──▶ │ GREEN (impl) │ ──▶ │  REFACTOR    │
 │              │     │  (failing)   │     │ (until tests │     │ (clean up,   │
 │ Reads:       │     │              │     │  pass)       │     │  tests must  │
-│ - personas   │     │              │     │              │     │  still pass) │
+│ - strategy   │     │              │     │              │     │  still pass) │
+│ - constitution│    │              │     │              │     │              │
+│ - personas   │     │              │     │              │     │              │
 │ - tokens     │     │              │     │              │     │              │
 │              │     │              │     │              │     │              │
 │ Writes:      │     │              │     │              │     │              │
@@ -143,17 +150,18 @@ All three are optional but improve every spec. `/spec-first` will note what's mi
                                                               └──────────────┘
 ```
 
-The **SPEC** step loads personas and design tokens, writes Gherkin scenarios using the user's vocabulary, creates ASCII mockups referencing design tokens, then re-reads the draft through the persona's eyes and revises. The revision notes appear at the pause point so you see what changed and why.
+The **SPEC** step loads strategy, constitution, personas, and design tokens. It writes Gherkin scenarios using the user's vocabulary, creates ASCII mockups referencing design tokens, adds strategy alignment and constitutional compliance sections, then re-reads the draft through the persona's eyes and revises. The revision notes appear at the pause point so you see what changed and why.
 
 The **TDD** step (`/tdd` command) runs the full Red-Green-Refactor cycle: write failing tests (RED), implement until they pass (GREEN), self-check drift, refactor the code (tests must still pass), re-check drift, then extract learnings.
 
 ### Roadmap: Full App Build
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  /vision    │ ──▶ │  /personas  │ ──▶ │  /roadmap   │ ──▶ │ /build-next │
-│ (describe)  │     │ + /tokens   │     │  (plan)     │     │  (repeat)   │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+┌────────────┐  ┌──────────┐  ┌──────────────┐  ┌─────────────┐  ┌─────────────┐
+│ /strategy  │─▶│ /vision  │─▶│  /personas   │─▶│  /roadmap   │─▶│ /build-next │
+│ (position) │  │(describe)│  │+/constitution│  │  (plan)     │  │  (repeat)   │
+└────────────┘  └──────────┘  │  + /tokens   │  └─────────────┘  └─────────────┘
+                              └──────────────┘
 
 Or from an existing app:
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -311,8 +319,10 @@ Every feature build goes through a multi-stage pipeline. Each agent-based step r
 
 | Command | Purpose |
 |---------|---------|
-| `/vision` | Create or update vision.md from description, Jira, or Confluence |
-| `/personas` | Create user personas (vocabulary, patience, frustrations, anti-persona) |
+| `/strategy` | Define business strategy: target customer, buying motion, value prop, metrics |
+| `/vision` | Create or update vision.md from description, Jira, or Confluence (reads strategy) |
+| `/personas` | Create user personas (reads strategy + vision for target customer segment) |
+| `/constitution` | Define non-negotiable constraints: security, data handling, error patterns |
 | `/design-tokens` | Create personality-driven design tokens (reads vision + personas) |
 | `/spec-init` | Discover codebase structure, create doc-queue.md (discovery only) |
 
@@ -416,6 +426,8 @@ Unlike generic design token templates, `/design-tokens` derives a **tailored** s
 │   └── commands/           # Claude Code command definitions
 │
 ├── .specs/
+│   ├── strategy.md         # Business strategy (created by /strategy)
+│   ├── constitution.md     # Non-negotiable constraints (created by /constitution)
 │   ├── vision.md           # App vision (created by /vision or /clone-app)
 │   ├── roadmap.md          # Feature roadmap (single source of truth)
 │   ├── personas/           # User personas (inform every spec)
@@ -751,22 +763,26 @@ mkdir my-app && cd my-app
 git init
 git auto
 
-# 2. Define what you're building
+# 2. Define business strategy (optional but recommended)
+/strategy "Task management for small dev teams"
+
+# 3. Define what you're building
 /vision "A task management app for small teams with projects, labels, and due dates"
 
-# 3. Create personas and design system
-/personas                    # Creates primary persona + anti-persona
+# 4. Create personas, constraints, and design system
+/personas                    # Creates primary persona + anti-persona (reads strategy)
+/constitution                # Creates security/data constraints (reads strategy + vision)
 /design-tokens               # Derives personality-driven tokens from vision + personas
 
-# 4. Create the build plan
-/roadmap create
+# 5. Create the build plan
+/roadmap create              # Reads strategy for prioritization
 
-# 5. Build feature by feature
+# 6. Build feature by feature
 /build-next    # Builds feature #1 (spec uses persona vocabulary + design tokens)
 /build-next    # Builds feature #2
 # ...or let overnight automation handle it
 
-# 6. Check progress
+# 7. Check progress
 /roadmap status
 ```
 

@@ -92,6 +92,14 @@ Read .specs/personas/*.md for:
 These drive Gherkin language, flow complexity, and UI labels.
 ```
 
+### Read Strategy
+```
+Read .specs/strategy.md (if exists) for:
+- Target customer segment and buying motion
+- Success metrics (what should this feature move?)
+- Anti-goals (features to avoid or defer)
+```
+
 ### Read Vision
 ```
 Read .specs/vision.md for:

@@ -1,136 +1,70 @@
-# Personas
-
-Create or update user personas that inform every feature spec.
-
-## Usage
-
-```
-/personas                                    # Create personas (reads vision for context)
-/personas "busy real estate broker"          # Create from description
-/personas update                             # Revise existing personas
-/personas add "office admin who manages deals for brokers"  # Add a new persona
-```
-
 ---
+description: Create or update user personas that inform every feature spec
+---
+
+Create or update user personas: $ARGUMENTS
 
 ## What Personas Are For
 
-Personas are reference files that `/spec-first` reads before writing any spec. They answer:
-- **What language does this person use?** (Labels and copy should match)
-- **How patient are they?** (Determines flow length and complexity)
-- **What's their context?** (Mobile in the field? Desktop all day? Between meetings?)
-- **What do they already know?** (Determines onboarding needs and default behavior)
+Personas are reference files that `/spec-first` reads before writing any spec. They drive:
+- **Vocabulary** — UI labels use the persona's words, not developer words
+- **Flow complexity** — patience level determines how many steps are acceptable
+- **What NOT to build** — anti-persona prevents scope creep
 
-Personas are NOT fictional marketing profiles. Skip the stock photo and the name. Focus on behaviors, constraints, and vocabulary.
-
----
-
-## Behavior: Create
+## Instructions
 
 ### Step 1: Read Context
 
-| File | What You Learn |
-|------|---------------|
-| `.specs/vision.md` | Target users, app purpose, design principles |
-| Existing codebase | Who the current UI seems designed for |
+Read these files if they exist:
+- `.specs/strategy.md` — target customer segment, buying motion, anti-segment. **Strategy determines who the personas are.** If strategy says "selling bottom-up to individual sales reps," your primary persona is a rep, not a VP Sales. If strategy says "enterprise top-down," the personas flip.
+- `.specs/vision.md` — target users, app purpose, design principles
+- `.specs/personas/*.md` — any existing personas (to avoid duplicates)
 
-If vision.md exists and describes target users, derive personas from it.
-If nothing exists, ask:
-
-```
-Who uses this app? Tell me:
-
+If no vision or strategy exists and no description was provided, ask:
 1. Who is the primary user? (role, not name)
 2. What's their typical day like? (busy/relaxed, desk/mobile, technical/non-technical)
 3. Is there a secondary user with different needs?
 4. Who is this NOT for? (anti-persona)
-```
 
 ### Step 2: Write Personas
 
-Create 2-3 files in `.specs/personas/`:
+Create files in `.specs/personas/`:
 
-| File | Purpose |
-|------|---------|
-| `primary.md` | The main user. Every feature must work for this person. |
-| `secondary.md` | A different type of user with different needs (if applicable). |
-| `anti-persona.md` | Who you're NOT building for. Prevents scope creep. |
+**Most projects need 2:**
+- `primary.md` — the main user, every feature must work for them
+- `anti-persona.md` — who you're NOT building for, prevents scope creep
 
-Most projects need 2 (primary + anti-persona). Only add secondary if the app genuinely serves two different user types (e.g., both brokers and admins).
+Only add `secondary.md` if the app genuinely serves two different user types.
 
-### Step 3: Report
+### Persona Format
 
 ```markdown
-## Personas Created
-
-**Primary**: [role] — [one-line summary of their key constraint]
-**Anti-persona**: [role] — [why we're not building for them]
-
-Files:
-- `.specs/personas/primary.md`
-- `.specs/personas/anti-persona.md`
-
-These will be loaded by /spec-first when writing feature specs.
-```
-
----
-
-## Behavior: Update
-
-1. Read existing personas
-2. Read `.specs/learnings/` for any user-behavior insights discovered during implementation
-3. Read vision.md for any changes to target audience
-4. Update personas, noting what changed and why
-
----
-
-## Behavior: Add
-
-1. Read existing personas to avoid overlap
-2. Create a new persona file
-3. Explain how this persona differs from existing ones
-
----
-
-## Persona File Format
-
-```markdown
-# [Role — e.g., "Commercial Real Estate Broker"]
+# [Role]
 
 ## Context
-
 - [How they spend their day]
-- [What devices/environment they work in]
-- [Technical sophistication level]
+- [Devices and environment]
+- [Technical sophistication]
 - [How many tools they juggle]
 
 ## What They Care About
-
-- [Their actual goal — not "use the app" but the real-world outcome]
-- [What makes them choose this tool over alternatives/spreadsheets]
-- [What would make them recommend it to a colleague]
+- [Real-world outcome they're after]
+- [Why they'd choose this tool]
+- [What would make them recommend it]
 
 ## What Frustrates Them
-
-- [Specific interaction patterns they hate]
-- [Things that waste their time]
-- [Complexity they don't want to deal with]
+- [Interaction patterns they hate]
+- [Time wasters]
+- [Complexity they avoid]
 
 ## Their Vocabulary
-
-- [Terms they use vs. developer/technical terms]
-- [e.g., "deal" not "transaction", "comp" not "comparable sale"]
-- [This directly shapes UI labels and copy]
+- [Their term] not [developer term]
 
 ## Patience Level
-
-[One of: Very Low / Low / Medium / High]
-[One sentence explaining why — e.g., "Between client calls all day, will abandon any flow that takes more than 30 seconds"]
+[Very Low / Low / Medium / High] — [why]
 
 ## Success Metric
-
-[How this person measures whether the app is working for them]
-[e.g., "Can I find the comp I need before my client meeting in 10 minutes?"]
+[How they measure if the app works for them]
 ```
 
 ### Anti-Persona Format
@@ -139,101 +73,37 @@ These will be loaded by /spec-first when writing feature specs.
 # Anti-Persona: [Role]
 
 ## Who This Is
-
 - [Description of the user type we're NOT targeting]
 
 ## Why They're Out of Scope
-
 - [What they'd need that would distort the product]
 - [How serving them would hurt the primary persona's experience]
 
 ## What to Say If Requested
-
-[How to redirect — e.g., "If someone asks for a public API, that's this persona. We're not building that in v1. Note it in roadmap as future/maybe."]
+[How to redirect feature requests from this persona]
 ```
 
----
+### Step 3: Report
 
-## How Personas Are Used
+Show:
+- Primary persona summary (role + key constraint)
+- Anti-persona summary (role + why excluded)
+- Files created
+- Note: "These will be loaded by /spec-first when writing feature specs."
 
-### By `/spec-first`
-Before writing Gherkin scenarios and mockups:
-1. Reads all persona files from `.specs/personas/`
-2. Uses primary persona's vocabulary for UI labels
-3. Uses patience level to gauge flow length
-4. Uses frustrations to avoid known pain patterns
-5. After writing the spec, reviews it through the persona lens and revises
+## Update Mode
 
-### By `/design-tokens`
-- Persona patience level → influences information density → influences spacing base
-- Persona technical level → influences terminology in component naming
-- Persona context (mobile/desktop) → influences breakpoint priorities
+If personas already exist:
+1. Read current personas
+2. Read `.specs/strategy.md` for any target customer changes
+3. Read `.specs/learnings/` for user-behavior insights
+4. Read vision.md for any audience changes
+5. Check for strategy↔persona drift (e.g., strategy says "individual reps" but primary persona is "VP Sales")
+6. Update personas, noting what changed and why
 
-### By the developer (you)
-- When deciding between "simple but limited" and "powerful but complex," the persona tells you which to pick
-- When naming a button or writing error text, the persona tells you what words to use
+## Add Mode
 
----
-
-## Examples
-
-### Primary: Busy Broker
-```markdown
-# Commercial Real Estate Broker
-
-## Context
-- On the phone or in meetings 6 hours/day
-- Uses the app in 5-minute bursts between calls
-- Laptop at desk, phone in the field
-- Not technical — learned Excel out of necessity, not interest
-
-## What They Care About
-- Finding the right comp before a client meeting
-- Not looking unprepared in front of clients
-- Closing deals faster than competing brokers
-
-## What Frustrates Them
-- Can't find something they know is "in there somewhere"
-- Flows that require more than 2-3 clicks
-- Jargon or settings they don't understand
-- Having to re-enter information the app should already know
-
-## Their Vocabulary
-- "Comp" not "comparable sale analysis"
-- "Deal" not "transaction"
-- "Contact" not "stakeholder entity"
-- "My deals" not "assigned pipeline items"
-
-## Patience Level
-Very Low — between calls, will close the tab if it takes more than 10 seconds to find what they need.
-
-## Success Metric
-"I pulled the right comp in under a minute and looked prepared in front of my client."
-```
-
-### Anti-Persona: Developer
-```markdown
-# Anti-Persona: Developer/API Consumer
-
-## Who This Is
-- A developer who wants to integrate this data into their own tools
-- Wants an API, webhooks, bulk export, custom queries
-
-## Why They're Out of Scope
-- Building for API consumers means auth tokens, rate limiting, documentation, versioning
-- That's a whole product, not a feature
-- It would slow down iteration on the broker experience
-
-## What to Say If Requested
-"API access is a different product. Note it in roadmap as Phase N / future consideration. Don't let it influence the UI or data model of v1."
-```
-
----
-
-## File Locations
-
-| File | Purpose |
-|------|---------|
-| `.specs/personas/primary.md` | Main user persona |
-| `.specs/personas/secondary.md` | Second user type (if needed) |
-| `.specs/personas/anti-persona.md` | Who you're NOT building for |
+If `add` subcommand:
+1. Read existing personas to avoid overlap
+2. Create new persona file
+3. Explain how it differs from existing ones

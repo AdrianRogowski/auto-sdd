@@ -21,17 +21,18 @@ Manage the roadmap for: $ARGUMENTS
 
 ### Create Mode
 
-1. Read `.specs/vision.md` for app overview, screens, tech stack, principles
-2. Scan codebase for existing features (routes, API, schema, components) — mark as ✅
-3. Decompose into right-sized features:
+1. Read `.specs/strategy.md` for business strategy — target customer, buying motion, success metrics, anti-goals. **Strategy drives prioritization**: features that support the buying motion and move success metrics come first. Anti-goals prevent scope creep into features the strategy says to defer.
+2. Read `.specs/vision.md` for app overview, screens, tech stack, principles
+3. Scan codebase for existing features (routes, API, schema, components) — mark as ✅
+4. Decompose into right-sized features:
    - **S**: 1-3 files, single component
    - **M**: 3-7 files, multiple components
    - **L**: 7-15 files, full feature
    - If bigger than L, break down further
-4. Identify dependencies between features
-5. Group into phases (4-8 features each, descriptive names, clear goals)
-6. Write roadmap.md with Implementation Rules, Progress, Phases, Status/Complexity Legends, Notes
-7. Show draft, wait for approval
+5. Identify dependencies between features
+6. Group into phases (4-8 features each, descriptive names, clear goals). If strategy exists, phase names should reflect the strategy's progression (e.g., "Phase 1: Core Value / Time-to-Aha" for PLG, "Phase 1: Enterprise Onboarding" for top-down)
+7. Write roadmap.md with Implementation Rules, Progress, Phases, Status/Complexity Legends, Notes
+8. Show draft, wait for approval
 
 ### Add Mode
 
@@ -42,7 +43,7 @@ Manage the roadmap for: $ARGUMENTS
 
 ### Reprioritize Mode
 
-1. Read roadmap, vision, learnings, mapping
+1. Read roadmap, strategy, vision, learnings, mapping. If strategy exists, check alignment: "Are the top features actually the ones that move the strategy's success metrics?"
 2. Present analysis: what's done, what's next, observations (parallelizable phases, dependency bottlenecks, complexity concerns)
 3. Ask about priority changes, new features, cancellations, reordering
 4. Restructure based on feedback

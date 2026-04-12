@@ -28,7 +28,7 @@ Per feature:
                                                                  │ (learnings)  │
                                                                  └──────────────┘
 
-Reads from: .specs/personas/, .specs/design-system/
+Reads from: .specs/strategy.md, .specs/constitution.md, .specs/personas/, .specs/design-system/, .specs/learnings/index.md
 Writes to: .specs/features/, .specs/design-system/components/ (stubs)
 ```
 
@@ -89,6 +89,34 @@ Stop for user approval at each step (existing behavior).
 
 Before writing anything, read what exists. This shapes the entire spec.
 
+#### Strategy
+
+Read `.specs/strategy.md` if it exists and has real content (not just the template). The strategy provides:
+- **Target customer** — who the feature should serve (validates feature is for the right segment)
+- **Buying motion** — PLG features need fast time-to-value; enterprise features can have setup flows
+- **Value proposition** — every feature should connect to the core value
+- **Anti-goals** — features that serve anti-goals should be flagged or deferred
+
+If strategy exists, the spec will include a **Strategy Alignment** section.
+If no strategy exists, note it:
+
+```
+ℹ️ No strategy.md found. Spec will not include strategy alignment.
+Run /strategy to define product positioning.
+```
+
+#### Constitution
+
+Read `.specs/constitution.md` if it exists and has real rules (not just the template). Constitutional constraints are non-negotiable rules (security, data handling, error handling) that every feature must satisfy.
+
+If constitution exists, the spec will include a **Constitutional Compliance** section.
+If no constitution exists, note it:
+
+```
+ℹ️ No constitution.md found. Spec will not include compliance section.
+Run /constitution to define project-wide constraints.
+```
+
 #### Personas (required for good specs)
 
 Read all files in `.specs/personas/`:
@@ -109,6 +137,10 @@ If `.specs/design-system/tokens.md` doesn't exist or is still the unmodified tem
 - Inform user: "Created design system. Customize tokens.md as needed."
 
 If it exists and is customized, read it for token names and personality.
+
+#### Learnings
+
+Read `.specs/learnings/index.md` for cross-cutting patterns from previous features. This prevents repeating mistakes and ensures consistency with established patterns.
 
 ### 2. Create or Update Feature Spec
 
@@ -184,7 +216,50 @@ After drafting the spec, re-read it through each persona's eyes and revise:
 
 5. **Revise the spec.** Apply changes directly. Track what you changed so you can report it.
 
-### 6. Add User Journey
+### 6. Add Strategy Alignment (if strategy.md exists)
+
+If `.specs/strategy.md` has real content, add a `## Strategy Alignment` section:
+
+```markdown
+## Strategy Alignment
+
+- **Target segment**: [From strategy — who this feature serves]
+- **Buying motion fit**: [How this feature supports the buying motion — e.g., "Reduces time-to-value for PLG onboarding"]
+- **Success metric**: [Which strategy success metric this feature moves]
+- **Anti-goal check**: [Confirm this feature doesn't serve a stated anti-goal]
+```
+
+If the feature conflicts with strategy (e.g., building an enterprise admin panel when strategy says PLG), flag it:
+
+```markdown
+## Strategy Alignment
+
+⚠️ **Potential misalignment**: This feature requires org-wide SSO setup before individual users get value.
+Strategy says bottom-up PLG — individual adoption without IT involvement.
+Consider: defer to Phase N, or redesign for individual-first with optional SSO upgrade.
+```
+
+### 7. Add Constitutional Compliance (if constitution.md exists)
+
+If `.specs/constitution.md` has real rules, add a `## Constitutional Compliance` section.
+
+For each rule in the constitution:
+- Mark **✅ Applies** if the feature touches that constraint area, and note how it's addressed
+- Mark **N/A** if the rule doesn't apply to this feature
+- Mark **⚠️ CONFLICT** if the feature cannot satisfy a rule, with explanation
+
+```markdown
+## Constitutional Compliance
+
+| Rule | Applies | Status |
+|------|---------|--------|
+| Auth: Server-side session verification | ✅ Yes | Addressed in Scenario: Auth redirect |
+| Data: No PII in logs | ✅ Yes | Email redacted in error handler |
+| API: Rate limiting on public endpoints | N/A | Internal endpoint only |
+| Error: Graceful degradation | ✅ Yes | Addressed in Scenario: API failure |
+```
+
+### 8. Add User Journey
 
 Add a brief `## User Journey` section (3-5 lines) showing where this feature sits in the user's workflow. What screen do they come from? Where do they go after?
 
@@ -198,7 +273,7 @@ Add a brief `## User Journey` section (3-5 lines) showing where this feature sit
 
 This prevents orphaned features with no way in and no way out.
 
-### 7. Pause Point (Normal Mode Only)
+### 9. Pause Point (Normal Mode Only)
 
 **If Normal Mode (no --full flag):**
 - Do NOT write any implementation code
@@ -220,6 +295,13 @@ Show the spec summary plus persona revision notes:
 1. [Scenario 1] - Happy path
 2. [Scenario 2] - Edge case
 3. [Scenario 3] - Error handling
+
+### Strategy Alignment
+- [Target segment + buying motion fit — or "No strategy.md found"]
+
+### Constitutional Compliance
+- [X of Y rules applicable, all addressed — or "No constitution.md found"]
+- [Any CONFLICT flags noted here]
 
 ### Persona Revision Applied
 - [What changed and why — e.g., "Renamed 'Query Parameters' → 'Search Filters' (broker vocabulary)"]
@@ -341,6 +423,22 @@ Then [error handling behavior]
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## Strategy Alignment
+
+<!-- Included when .specs/strategy.md exists -->
+- **Target segment**: [from strategy]
+- **Buying motion fit**: [how this feature supports the buying motion]
+- **Success metric**: [which strategy metric this moves]
+- **Anti-goal check**: [confirm no anti-goal conflict]
+
+## Constitutional Compliance
+
+<!-- Included when .specs/constitution.md exists -->
+
+| Rule | Applies | Status |
+|------|---------|--------|
+| [Rule from constitution] | ✅ / N/A / ⚠️ | [How addressed or why N/A] |
 
 ## Component References
 
@@ -533,7 +631,7 @@ These signals enable the automated drift-check that runs after your commit.
 ### I Will:
 
 1. **Resolve spec** - Search for existing spec matching "user profile"; if found, UPDATE mode; if not, CREATE mode
-2. **Load context** - Read personas (vocabulary, patience level, frustrations), read design tokens (personality, values)
+2. **Load context** - Read strategy, constitution, personas (vocabulary, patience level, frustrations), design tokens (personality, values), learnings index
 3. **Create or update spec file**: `.specs/features/users/profile-page.feature.md`
 4. **Write scenarios** (using persona vocabulary):
    - Display profile information
@@ -546,10 +644,12 @@ These signals enable the automated drift-check that runs after your commit.
    - Edit mode
    - Loading state
    - Error states
-6. **Add user journey** (where does this fit in the app?)
-7. **Create component stubs**
-8. **Persona revision pass** — re-read through persona's eyes, revise, note changes
-9. **STOP** and wait for approval (Normal mode) or continue to tests → implement → compound → commit (Full mode)
+6. **Add strategy alignment** (if strategy.md exists)
+7. **Add constitutional compliance** (if constitution.md exists)
+8. **Add user journey** (where does this fit in the app?)
+9. **Create component stubs**
+10. **Persona revision pass** — re-read through persona's eyes, revise, note changes
+11. **STOP** and wait for approval (Normal mode) or continue to tests → implement → compound → commit (Full mode)
 
 ---
 

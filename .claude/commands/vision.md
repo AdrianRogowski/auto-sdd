@@ -18,11 +18,12 @@ Create or update the vision for: $ARGUMENTS
 
 ### Create Mode
 
-1. **Gather information** from the user's description (`$ARGUMENTS`), or ask:
+1. **Read strategy** — If `.specs/strategy.md` exists and has real content, read it first. The strategy's target customer, value proposition, and business model should ground the vision. The vision becomes the product expression of the strategy.
+2. **Gather information** from the user's description (`$ARGUMENTS`), or ask:
    - What does the app do? Who is it for? What problem does it solve?
    - Main screens/areas? Tech stack? Design principles?
-2. **Scan the codebase** (if existing project) to detect tech stack, routes, schema, components
-3. **Draft vision.md** following the standard structure:
+3. **Scan the codebase** (if existing project) to detect tech stack, routes, schema, components
+4. **Draft vision.md** following the standard structure:
    - Overview, target users, value proposition
    - Key Screens table (Screen, Purpose, Priority)
    - Tech Stack table
@@ -47,7 +48,8 @@ Create or update the vision for: $ARGUMENTS
 ### Update Mode
 
 1. Read current `.specs/vision.md`
-2. Read `.specs/roadmap.md`, `.specs/learnings/index.md`, `.specs/mapping.md`
+2. Read `.specs/strategy.md` (if exists) to check for strategy↔vision drift
+3. Read `.specs/roadmap.md`, `.specs/learnings/index.md`, `.specs/mapping.md`
 3. Identify drift: new screens not in vision, tech stack changes, evolved principles, scope changes
 4. Present findings: what's accurate, what needs updating, suggested additions
 5. Ask which updates to apply
@@ -60,6 +62,7 @@ Report:
 ✅ Vision saved to .specs/vision.md
 
 Next steps:
+- Run /personas to define who uses this (reads strategy + vision)
 - Run /roadmap to create a build plan from this vision
 - Run /spec-first to start building a specific feature
 ```

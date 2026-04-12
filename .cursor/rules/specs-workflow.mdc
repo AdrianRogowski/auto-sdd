@@ -6,6 +6,8 @@ alwaysApply: true
 # Specs-Driven Development Workflow
 
 This project uses a specs-driven workflow. The `.specs/` directory contains:
+- `strategy.md` - Business strategy: target customer, buying motion, value prop
+- `constitution.md` - Non-negotiable constraints: security, data handling, errors
 - `features/` - Gherkin feature specifications with ASCII mockups
 - `personas/` - User personas that inform every spec
 - `test-suites/` - Documentation of what each test file covers
@@ -54,6 +56,29 @@ When the user says any of these, **invoke the corresponding ralph/utility comman
 | "clean slate", "kill everything", "restart everything", "nuke localhost" | Run `/clean-slate` |
 | "generate guide", "update guide", "how to use guide" | Run `/guide` |
 
+When the user says any of these, **invoke `/strategy`**:
+
+| User says | Action |
+|-----------|--------|
+| "strategy" | Run `/strategy` |
+| "product strategy" | Run `/strategy` |
+| "business strategy" | Run `/strategy` |
+| "shape this" | Run `/strategy` |
+| "who are we selling to" | Run `/strategy` |
+| "business model" | Run `/strategy` |
+| "go to market", "GTM" | Run `/strategy` |
+
+When the user says any of these, **invoke `/constitution`**:
+
+| User says | Action |
+|-----------|--------|
+| "constitution" | Run `/constitution` |
+| "project constraints" | Run `/constitution` |
+| "security rules" | Run `/constitution` |
+| "invariants" | Run `/constitution` |
+| "non-negotiables" | Run `/constitution` |
+| "audit specs" | Run `/constitution --audit` |
+
 **Create vs Update**: `/spec-first` auto-detects whether to create or update: searches `.specs/features/` for a matching spec (by path or frontmatter `feature:`). Match found → update existing spec. No match → create new spec. With `--full`, both paths continue through the full Red-Green-Refactor TDD cycle.
 
 ### Full Mode Triggers
@@ -66,6 +91,8 @@ If user includes "full", "auto", "no stops", or "don't pause":
 
 ```
 .specs/
+├── strategy.md            # Business strategy (created by /strategy)
+├── constitution.md        # Non-negotiable constraints (created by /constitution)
 ├── personas/              # User personas (inform every spec)
 │   ├── primary.md         # Main user persona
 │   ├── secondary.md       # Second user type (if needed)
@@ -101,15 +128,21 @@ If user includes "full", "auto", "no stops", or "don't pause":
 These are project-level infrastructure created once and referenced by every feature:
 
 ```
-/vision → creates .specs/vision.md (app purpose, target users, tech stack)
-    │
-    ├──▶ /personas → creates .specs/personas/ (who uses this, who doesn't)
-    │
-    └──▶ /design-tokens → creates .specs/design-system/tokens.md
-                          (reads vision + personas to derive personality + values)
+/strategy → creates .specs/strategy.md (business positioning, buying motion, metrics)
+ │
+ ├──▶ /vision → creates .specs/vision.md (reads strategy)
+ │     │
+ │     ├──▶ /personas → creates .specs/personas/ (reads strategy + vision)
+ │     │
+ │     ├──▶ /constitution → creates .specs/constitution.md (reads strategy + vision)
+ │     │
+ │     └──▶ /design-tokens → creates .specs/design-system/tokens.md
+ │          (reads vision + personas to derive personality + values)
+ │
+ └──▶ /roadmap → reads strategy for prioritization
 ```
 
-All three are optional but improve every spec that follows. `/spec-first` will note what's missing and still work without them.
+All are optional but improve every spec that follows. `/spec-first` will note what's missing and still work without them.
 
 ---
 
@@ -148,13 +181,15 @@ All three are optional but improve every spec that follows. `/spec-first` will n
 
 ### What happens in the SPEC step:
 
-1. **Load context** — Read personas and design tokens
+1. **Load context** — Read strategy, constitution, personas, design tokens, learnings index
 2. **Write Gherkin** — Scenarios using persona vocabulary, matching patience level
 3. **Write mockup** — ASCII art referencing design tokens
-4. **Add user journey** — Where this feature fits in the user's flow
-5. **Persona revision** — Re-read through persona's eyes, revise, note changes
-6. **Create component stubs** — For any new UI components
-7. **Pause** — Show spec + revision notes, ask "Run `/tdd` when ready"
+4. **Add strategy alignment** — How this feature supports the business strategy (if strategy.md exists)
+5. **Add constitutional compliance** — Which constraints apply and how (if constitution.md exists)
+6. **Add user journey** — Where this feature fits in the user's flow
+7. **Persona revision** — Re-read through persona's eyes, revise, note changes
+8. **Create component stubs** — For any new UI components
+9. **Pause** — Show spec + revision notes, ask "Run `/tdd` when ready"
 
 ### What happens in the /tdd step (Red-Green-Refactor):
 
@@ -297,12 +332,14 @@ Then [expected result]
 
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
+| `/strategy` | Define business strategy, target customer, buying motion | Before /vision for products with users |
 | `/spec-init` | Discover codebase, create doc-queue.md (discovery only) | First time on existing project |
-| `/spec-first` | Create or update spec + mockup (auto-detects) | Starting or updating any feature |
+| `/spec-first` | Create or update spec + mockup (reads strategy + constitution) | Starting or updating any feature |
 | `/spec-first --full` | Spec + full Red-Green-Refactor cycle (no pauses) | Automated builds |
 | `/tdd` | Red-Green-Refactor cycle from approved spec | After reviewing a spec |
-| `/vision` | Create or update vision.md | Setting app direction |
-| `/personas` | Create or update user personas | Before first feature (or anytime) |
+| `/vision` | Create or update vision.md (reads strategy) | Setting app direction |
+| `/personas` | Create or update user personas (reads strategy) | Before first feature (or anytime) |
+| `/constitution` | Define non-negotiable project constraints | Before first feature (or anytime) |
 | `/design-tokens` | Create or update design tokens | Before first feature (or anytime) |
 
 ### Core Workflow Commands
@@ -405,6 +442,8 @@ New components/modules should get a 2-3 letter prefix.
 
 | Type | Location |
 |------|----------|
+| Business strategy | `.specs/strategy.md` |
+| Project constitution | `.specs/constitution.md` |
 | User personas | `.specs/personas/*.md` |
 | Feature specs | `.specs/features/{domain}/{feature}.feature.md` |
 | Test suite docs | `.specs/test-suites/{mirrors test directory}` |
@@ -435,9 +474,11 @@ This prevents merge conflicts when multiple PRs touch different features.
 When working with specs, always tell the user:
 - Which spec files you're reading
 - Which spec files you're creating/updating
+- Whether strategy.md and constitution.md were loaded
 - Which persona files you're reading
 - Which design system files you're creating/referencing
 - Any gaps between specs and tests
+- Any constitutional compliance conflicts
 - Component stubs that need to be filled in
 
 This helps the user track documentation changes.

@@ -11,7 +11,7 @@ When executing SDD commands, use subagents (the Task tool) to parallelize indepe
 ## When to Fan Out
 
 ### During /spec-first
-- **Parallel reads**: Load personas, design tokens, and search for existing spec simultaneously (3 parallel explore subagents)
+- **Parallel reads**: Load strategy, constitution, personas, design tokens, learnings index, and search for existing spec simultaneously (up to 6 parallel explore subagents)
 - **Component stub creation**: If mockup references 3+ new components, create stubs in parallel
 
 ### During /tdd
@@ -19,7 +19,7 @@ When executing SDD commands, use subagents (the Task tool) to parallelize indepe
 - **Drift check + compound**: After refactor, drift check and compound can start reading files in parallel (drift checks code, compound reads learnings index)
 
 ### During /build-next
-- **Context loading**: Read vision, personas, design tokens, related specs, and learnings index in parallel (5 parallel reads)
+- **Context loading**: Read strategy, vision, personas, constitution, design tokens, related specs, and learnings index in parallel (7 parallel reads)
 - **Post-build phases**: If drift check and code review are both enabled, they read independent file sets — run simultaneously
 
 ### During /check-coverage
@@ -59,7 +59,7 @@ subagent_type: "generalPurpose"
 ### Pattern: Parallel Reads Then Sequential Write
 
 ```
-1. Fan out: 3 explore subagents read personas, tokens, existing specs
+1. Fan out: explore subagents read strategy, constitution, personas, tokens, learnings, existing specs
 2. Collect results
 3. Sequential: Write the spec using all gathered context
 ```

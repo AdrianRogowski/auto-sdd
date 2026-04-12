@@ -2,6 +2,28 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.4.0 — Product Strategy & Constitutional Constraints
+
+### New
+- **`/strategy` command** — Define business strategy (target customer, buying motion, value proposition, success metrics, anti-goals) through a guided conversation before building. Outputs `.specs/strategy.md`. Available in both Cursor and Claude Code.
+- **`/constitution` command** — Define non-negotiable project constraints (security, data handling, error patterns, dependencies) tailored to the project's tech stack and strategy. Outputs `.specs/constitution.md`. Includes `--audit` mode to scan all specs for compliance. Available in both Cursor and Claude Code.
+- **Strategy Alignment section in specs** — `/spec-first` reads `strategy.md` and adds a Strategy Alignment section to every feature spec, showing which customer segment the feature serves, how it supports the buying motion, and which success metric it moves. Flags misalignment (e.g., "enterprise feature in a PLG strategy").
+- **Constitutional Compliance section in specs** — `/spec-first` reads `constitution.md` and adds a Constitutional Compliance section to every feature spec. Each rule is marked as applicable, N/A, or flagged as a conflict.
+- **Learnings index in /spec-first** — `/spec-first` now reads `.specs/learnings/index.md` during context loading, so specs benefit from cross-cutting patterns discovered in previous features.
+- **Pre-populated security learnings** — `.specs/learnings/security.md` ships with 9 starter entries covering common web security patterns (CWE-referenced), replacing the empty "No learnings yet" stubs.
+- **Natural language triggers** for new commands: "strategy", "product strategy", "business strategy", "shape this", "GTM", "constitution", "project constraints", "security rules", "invariants", "audit specs".
+
+### Changed
+- **`/vision`** now reads `strategy.md` in both Create and Update modes. Strategy grounds the vision in business decisions.
+- **`/personas`** now reads `strategy.md`. Strategy determines who the personas are (target segment → primary persona, anti-segment → anti-persona).
+- **`/roadmap`** now reads `strategy.md` in Create and Reprioritize modes. Strategy drives feature prioritization by business value and buying motion fit.
+- **`/build-next`** now reads `strategy.md` during context loading alongside vision, personas, and learnings.
+- **`/spec-first`** context loading (Step 1) expanded from "personas + design tokens" to "strategy + constitution + personas + design tokens + learnings index".
+- **CLAUDE.md** — Updated project setup flow (`/strategy → /vision → /personas → /constitution → /design-tokens`), new command tables, strategy/constitution sections, updated spec format with new sections.
+- **`.cursor/rules/specs-workflow.mdc`** — Updated to match CLAUDE.md: new triggers, updated setup flow, expanded context loading, file locations table.
+- **README.md** — Updated quick start, setup flow diagrams, command tables, directory structure, and examples to include strategy and constitution.
+- **`.specs/` directory** — New template files: `strategy.md`, `constitution.md`.
+
 ## 2.3.2 — Fix Parallel Mode Quality Parity
 
 ### Fixed

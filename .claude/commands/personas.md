@@ -16,10 +16,11 @@ Personas are reference files that `/spec-first` reads before writing any spec. T
 ### Step 1: Read Context
 
 Read these files if they exist:
+- `.specs/strategy.md` — target customer segment, buying motion, anti-segment. **Strategy determines who the personas are.** If strategy says "selling bottom-up to individual sales reps," your primary persona is a rep, not a VP Sales. If strategy says "enterprise top-down," the personas flip.
 - `.specs/vision.md` — target users, app purpose, design principles
 - `.specs/personas/*.md` — any existing personas (to avoid duplicates)
 
-If no vision exists and no description was provided, ask:
+If no vision or strategy exists and no description was provided, ask:
 1. Who is the primary user? (role, not name)
 2. What's their typical day like? (busy/relaxed, desk/mobile, technical/non-technical)
 3. Is there a secondary user with different needs?
@@ -94,9 +95,11 @@ Show:
 
 If personas already exist:
 1. Read current personas
-2. Read `.specs/learnings/` for user-behavior insights
-3. Read vision.md for any audience changes
-4. Update personas, noting what changed and why
+2. Read `.specs/strategy.md` for any target customer changes
+3. Read `.specs/learnings/` for user-behavior insights
+4. Read vision.md for any audience changes
+5. Check for strategy↔persona drift (e.g., strategy says "individual reps" but primary persona is "VP Sales")
+6. Update personas, noting what changed and why
 
 ## Add Mode
 

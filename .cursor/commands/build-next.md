@@ -2,6 +2,8 @@
 
 Pick the next pending feature from the roadmap and build it through the full TDD cycle.
 
+> See `.cursor/commands/build-next.md` for full spec including Jira MCP syntax.
+
 ## Usage
 
 ```
@@ -14,7 +16,7 @@ Pick the next pending feature from the roadmap and build it through the full TDD
 ## What This Command Does
 
 1. **Select** - Find the next buildable feature (pending, dependencies met)
-2. **Spec** - Create or update feature spec
+2. **Spec** - Create or update feature spec with `/spec-first --full`
 3. **Build** - Implement through TDD cycle (includes self-check drift)
 4. **Update** - Mark roadmap as complete, sync Jira
 5. **Build Check** - Shell verifies compilation (auto-detected or `BUILD_CHECK_CMD`)
@@ -90,6 +92,14 @@ Read .specs/personas/*.md for:
 These drive Gherkin language, flow complexity, and UI labels.
 ```
 
+### Read Strategy
+```
+Read .specs/strategy.md (if exists) for:
+- Target customer segment and buying motion
+- Success metrics (what should this feature move?)
+- Anti-goals (features to avoid or defer)
+```
+
 ### Read Vision
 ```
 Read .specs/vision.md for:
@@ -133,23 +143,9 @@ Commit: `chore: start feature #5 - Dashboard`
 
 ## Step 5: Sync Jira (if configured)
 
-If the feature has a Jira ticket and `SYNC_JIRA_STATUS=true`:
-
-```
-CallMcpTool("user-atlassian", "transitionJiraIssue", {
-  cloudId: "[from config]",
-  issueIdOrKey: "PROJ-105",
-  transition: { id: "[In Progress transition ID]" }
-})
-```
-
-To find transition IDs:
-```
-CallMcpTool("user-atlassian", "getTransitionsForJiraIssue", {
-  cloudId: "[from config]",
-  issueIdOrKey: "PROJ-105"
-})
-```
+If the feature has a Jira ticket and Jira integration is enabled:
+- Transition issue to "In Progress"
+- Use available Jira MCP tools
 
 ---
 
@@ -211,36 +207,16 @@ Commit: `chore: complete feature #5 - Dashboard`
 ## Step 8: Sync Jira on Completion
 
 If feature has Jira ticket:
-
-```
-// Transition to Done (or your "Ready for Review" status)
-CallMcpTool("user-atlassian", "transitionJiraIssue", {
-  cloudId: "[from config]",
-  issueIdOrKey: "PROJ-105",
-  transition: { id: "[Done transition ID]" }
-})
-
-// Add comment with PR link (if PR created)
-CallMcpTool("user-atlassian", "addCommentToJiraIssue", {
-  cloudId: "[from config]",
-  issueIdOrKey: "PROJ-105",
-  commentBody: "✅ Implementation complete!\n\nPR: [PR_URL]\nSpec: .specs/features/dashboard/dashboard.feature.md"
-})
-```
+- Transition to Done (or "Ready for Review")
+- Add comment with PR link
 
 ---
 
 ## Step 9: Mark Source Complete (Slack)
 
 If feature source is Slack (`slack:CHANNEL/TIMESTAMP`):
-
-```
-CallMcpTool("user-slack", "conversations_add_message", {
-  channel_id: "[CHANNEL]",
-  thread_ts: "[TIMESTAMP]",
-  payload: "✅ Done! This feature has been implemented.\n\nPR: [PR_URL]"
-})
-```
+- Reply to thread confirming completion
+- Include PR link
 
 ---
 
@@ -267,17 +243,15 @@ No additional action needed here - learnings are already extracted.
 
 ### Required Output Signals
 
-When run from the build loop, you MUST output these signals at the end (each on its own line):
+You MUST output these signals at the end (each on its own line):
 
 ```
 FEATURE_BUILT: {feature name}
-SPEC_FILE: {path to the .feature.md file you created/updated}
-SOURCE_FILES: {comma-separated paths to source files created/modified}
+SPEC_FILE: {path to .feature.md file}
+SOURCE_FILES: {comma-separated source file paths}
 ```
 
-These are parsed by `build-loop-local.sh` and `overnight-autonomous.sh` to:
-1. Know which feature was built
-2. Pass exact file paths to the automated drift-check agent
+These are parsed by the build loop to run automated drift-checking.
 
 ### If Feature Built Successfully
 
@@ -293,7 +267,7 @@ Roadmap progress: 5/18 features (28%)
 
 FEATURE_BUILT: Dashboard
 SPEC_FILE: .specs/features/dashboard/dashboard.feature.md
-SOURCE_FILES: app/(protected)/dashboard/page.tsx, components/dashboard-stats.tsx, hooks/useDashboardData.ts
+SOURCE_FILES: app/(protected)/dashboard/page.tsx, components/dashboard-stats.tsx
 
 Run /build-next again to continue, or wait for overnight automation.
 ```
