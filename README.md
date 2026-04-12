@@ -153,6 +153,7 @@ If you're still validating the problem, iterate on strategy + GTM before committ
 │              │     │              │     │              │     │              │
 │ Writes:      │     │              │     │              │     │              │
 │ - Gherkin    │     │              │     │              │     │              │
+│ - tech design│     │              │     │              │     │              │
 │ - mockup     │     │              │     │              │     │              │
 │ - journey    │     │              │     │              │     │              │
 │              │     │              │     │              │     │              │
@@ -171,9 +172,9 @@ If you're still validating the problem, iterate on strategy + GTM before committ
                                                               └──────────────┘
 ```
 
-The **SPEC** step loads strategy, constitution, personas, and design tokens. It writes Gherkin scenarios using the user's vocabulary, creates ASCII mockups referencing design tokens, adds strategy alignment and constitutional compliance sections, then re-reads the draft through the persona's eyes and revises. The revision notes appear at the pause point so you see what changed and why.
+The **SPEC** step loads strategy, constitution, personas, and design tokens. It writes Gherkin scenarios using the user's vocabulary, adds a **Technical Design** section (data model, API contracts, state management, key dependencies), creates ASCII mockups referencing design tokens, adds strategy alignment and constitutional compliance sections, then re-reads the draft through the persona's eyes and revises. The revision notes appear at the pause point so you see what changed and why.
 
-The **TDD** step (`/tdd` command) runs the full Red-Green-Refactor cycle: write failing tests (RED), implement until they pass (GREEN), self-check drift, refactor the code (tests must still pass), re-check drift, then extract learnings.
+The **TDD** step (`/tdd` command) runs the full Red-Green-Refactor cycle: write failing tests from Gherkin + Technical Design (RED), implement following the Technical Design contract until they pass (GREEN), self-check drift, refactor the code (tests must still pass), re-check drift, then automatically extract learnings and **failure signals** (drift caught, test retries, spec gaps).
 
 ### Roadmap: Full App Build
 
@@ -356,7 +357,7 @@ Every feature build goes through a multi-stage pipeline. Each agent-based step r
 | `/spec-first` | Create or update feature spec with Gherkin + ASCII mockup (persona-informed) |
 | `/spec-first --full` | Create/update spec AND build without pauses (full Red-Green-Refactor cycle) |
 | `/tdd` | Run Red-Green-Refactor cycle from an approved spec |
-| `/compound` | Extract learnings from current session |
+| `/compound` | Extract learnings + failure signals (auto-runs after /tdd, manual for other sessions) |
 
 ### Roadmap Commands
 
@@ -662,6 +663,23 @@ Then user sees their dashboard
 2. **Clicks "Log in" → sees this login form**
 3. Submits → redirected to Dashboard (feature #5)
 
+## Technical Design
+
+### Data Model
+- `Session` entity: { id, user_id, token_hash, expires_at, created_at }
+- Validates against `User` (many-to-one)
+
+### API Contracts
+- `POST /api/auth/login` — Authenticate. Body: { email, password }. Returns: { user, session_token }. Errors: 401 (invalid), 422 (validation)
+
+### State Management
+- Auth state: httpOnly cookie (session token) + React context (user object)
+- Form state: local component state, cleared on submit
+
+### Key Dependencies
+- Uses: existing Input, Button components
+- Introduces: AuthService, useAuth hook, AuthContext
+
 ## UI Mockup
 
 ┌─────────────────────────────────────┐
@@ -680,12 +698,15 @@ Then user sees their dashboard
 
 ## Compound Learning
 
-Learnings are persisted at two levels:
+`/compound` runs **automatically** at the end of every `/tdd` cycle. It captures both success patterns and failure signals:
 
-| Level | Location | Example |
-|-------|----------|---------|
+| Type | Location | Example |
+|------|----------|---------|
 | Feature-specific | Spec's `## Learnings` section | "Login: Safari needs onBlur" |
 | Cross-cutting | `.specs/learnings/{category}.md` | "All forms need loading states" |
+| Failure signal | Both spec AND category file | "Drift: spec didn't specify redirect target → always specify URLs in Gherkin Then clauses" |
+
+**Failure signals** (drift caught, test retries, human corrections, spec gaps, build failures) include root cause and a "fix for future" directive. They're the highest-value learnings — they prevent future agents from repeating the same mistakes.
 
 Categories: `testing.md`, `performance.md`, `security.md`, `api.md`, `design.md`, `general.md`
 

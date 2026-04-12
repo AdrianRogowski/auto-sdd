@@ -234,22 +234,23 @@ Known product: /strategy → /vision → /personas → /roadmap → build
 
 1. **Load context** — Read strategy, constitution, personas, design tokens, learnings index
 2. **Write Gherkin** — Scenarios using persona vocabulary, matching patience level
-3. **Write mockup** — ASCII art referencing design tokens
-4. **Add strategy alignment** — How this feature supports the business strategy (if strategy.md exists)
-5. **Add constitutional compliance** — Which constraints apply and how (if constitution.md exists)
-6. **Add user journey** — Where this feature fits in the user's flow
-7. **Persona revision** — Re-read through persona's eyes, revise, note changes
-8. **Create component stubs** — For any new UI components
-9. **Pause** — Show spec + revision notes, ask "Run `/tdd` when ready"
+3. **Write technical design** — Data model, API contracts, state management, key dependencies (bridges WHAT→HOW)
+4. **Write mockup** — ASCII art referencing design tokens
+5. **Add strategy alignment** — How this feature supports the business strategy (if strategy.md exists)
+6. **Add constitutional compliance** — Which constraints apply and how (if constitution.md exists)
+7. **Add user journey** — Where this feature fits in the user's flow
+8. **Persona revision** — Re-read through persona's eyes, revise, note changes
+9. **Create component stubs** — For any new UI components
+10. **Pause** — Show spec + revision notes, ask "Run `/tdd` when ready"
 
 ### What happens in the /tdd step (Red-Green-Refactor):
 
-1. **RED** — Write failing tests from Gherkin scenarios
-2. **GREEN** — Implement until all tests pass
-3. **Drift Check L1** — Self-check spec vs code alignment
+1. **RED** — Write failing tests from Gherkin scenarios + Technical Design
+2. **GREEN** — Implement until all tests pass (track failure signals: test retries, build failures)
+3. **Drift Check L1** — Self-check spec vs code alignment (track drift as failure signal)
 4. **REFACTOR** — Clean up code, tests must still pass
-5. **Drift Check L1b** — Re-verify after refactoring
-6. **COMPOUND** — Extract learnings
+5. **Drift Check L1b** — Re-verify after refactoring (track drift as failure signal)
+6. **COMPOUND** — Always runs. Extracts learnings AND failure signals (drift, retries, spec gaps, corrections)
 
 ---
 
@@ -351,6 +352,24 @@ Then [expected result]
 2. **[This feature]**
 3. [Where user goes next]
 
+## Technical Design
+
+### Data Model
+- [Entity]: { [key fields] }
+- Relationships: [how entities connect]
+
+### API Contracts
+<!-- Skip if purely client-side -->
+- `[METHOD] [endpoint]` — [purpose]. Body/Query: { [shape] }. Returns: [shape]. Errors: [codes]
+
+### State Management
+- [What state lives where: URL params, local state, global store, server cache]
+- [Key state transitions]
+
+### Key Dependencies
+- Uses: [existing modules, services, components]
+- Introduces: [new modules this feature creates]
+
 ## UI Mockup
 
 (ASCII art referencing design tokens, using persona vocabulary)
@@ -407,7 +426,7 @@ Then [expected result]
 | `/document-code` | Generate specs/tests from existing code (reverse TDD) |
 | `/prototype` | Rapid prototyping without specs/tests |
 | `/formalize` | Convert prototype to production code with full specs |
-| `/compound` | Extract and persist learnings from current session |
+| `/compound` | Extract learnings + failure signals from session (auto-runs after /tdd) |
 | `/strip-specs` | Strip implementation details from specs for rebuilding in a new project |
 
 ### Roadmap Commands

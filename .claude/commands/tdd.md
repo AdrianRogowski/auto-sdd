@@ -53,19 +53,21 @@ Use this after reviewing a spec created by `/spec-first`.
 ### 1. RED — Write Failing Tests
 
 1. Read the spec file and ALL Gherkin scenarios
-2. Write tests covering every scenario: happy path, edge cases, error states, loading states
-3. Tests should **FAIL** (no implementation yet)
-4. Document tests in `.specs/test-suites/{path}.tests.md`
-5. Update spec frontmatter: `status: tested`, add test files to `tests: []`
+2. Read the `## Technical Design` section — use it to inform test setup (data shapes, API mocking, state management)
+3. Write tests covering every scenario: happy path, edge cases, error states, loading states
+4. Tests should **FAIL** (no implementation yet)
+5. Document tests in `.specs/test-suites/{path}.tests.md`
+6. Update spec frontmatter: `status: tested`, add test files to `tests: []`
 
 ### 2. GREEN — Implement Until Tests Pass
 
-1. Implement the feature incrementally
+1. Implement the feature incrementally, following the `## Technical Design` contract (data model, API shapes, state management)
 2. Use design tokens from `.specs/design-system/tokens.md`
 3. Follow component patterns from `.specs/design-system/components/`
 4. Run tests frequently — loop until ALL pass
-5. Update spec frontmatter: `status: implemented`, add components to `components: []`
-6. Do NOT update the roadmap status — that happens after all verification passes
+5. **Track failure signals**: If tests fail multiple times, note the root cause mentally (bad test, bad implementation, ambiguous spec, missing mock). These feed into compound.
+6. Update spec frontmatter: `status: implemented`, add components to `components: []`
+7. Do NOT update the roadmap status — that happens after all verification passes
 
 ### 3. Drift Check — Layer 1 (Self-Check)
 
@@ -75,7 +77,8 @@ Re-read your Gherkin scenarios and compare to what you just implemented:
 2. Check for behaviors in code not described in the spec
 3. Check for scenarios in the spec you didn't implement
 4. **If drift found**: fix the code to match the spec, or update the spec to document reality
-5. Ensure tests still pass after any changes
+5. **Track drift as a failure signal**: Note what drifted and why — this feeds into compound
+6. Ensure tests still pass after any changes
 
 ### 4. REFACTOR — Clean Up
 
@@ -96,13 +99,18 @@ Re-verify spec↔code alignment after refactoring:
 3. Check that refactoring didn't subtly change behavior (e.g., error handling, validation)
 4. **If drift found**: fix it, ensure tests pass
 
-### 6. Compound — Extract Learnings
+### 6. Compound — Extract Learnings (Automatic)
 
-Run `/compound` to capture what you learned:
+**Always run** — this is not optional. Extract learnings including failure signals:
 
 1. Feature-specific patterns → spec's `## Learnings` section
 2. Cross-cutting patterns → `.specs/learnings/{category}.md`
-3. Update `.specs/learnings/index.md`
+3. **Failure signals** → spec's `## Learnings` section AND `.specs/learnings/{category}.md`:
+   - Drift caught during Layer 1 or 1b (what drifted, root cause, prevention)
+   - Test retries (what failed, why, how to avoid)
+   - Spec revisions made during implementation (what was missing or wrong)
+   - Build/lint failures encountered
+4. Update `.specs/learnings/index.md`
 
 ### 7. Commit
 

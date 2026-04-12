@@ -183,7 +183,41 @@ updated: YYYY-MM-DD
 
 Include empty `## Learnings` section at the end.
 
-### 3. Create or Update ASCII Mockup
+### 3. Add Technical Design
+
+Add a `## Technical Design` section that bridges the gap between WHAT (Gherkin) and HOW (implementation). This reduces variance during the GREEN phase by giving the implementing agent a concrete contract instead of forcing it to invent data models and API shapes.
+
+Include only what's relevant to this feature:
+
+- **Data model**: Key entities, their fields, and relationships. What gets persisted vs. computed?
+- **API contracts** (if applicable): Endpoints, request/response shapes, error codes. Skip for purely client-side features.
+- **State management**: Where does state live? (URL params, local state, global store, server cache) What are the key state transitions?
+- **Key dependencies**: Which existing modules/services does this feature depend on? What new ones does it introduce?
+
+Keep it lightweight — a few bullet points per section, not a full design doc. The goal is to constrain implementation choices enough that two different agents would build roughly the same thing.
+
+```markdown
+## Technical Design
+
+### Data Model
+- `Deal` entity: { id, name, stage, value, assignee_id, created_at, updated_at }
+- Relates to: `Contact` (many-to-one), `Activity` (one-to-many)
+
+### API Contracts
+- `POST /api/deals` — Create deal. Body: { name, stage, value, contact_id }. Returns: Deal object. Errors: 422 (validation), 401 (unauth)
+- `GET /api/deals` — List deals. Query: ?stage=&sort=&page=. Returns: { data: Deal[], meta: { total, page } }
+
+### State Management
+- Deal list: server cache (React Query / SWR) keyed by filter params
+- Form state: local component state, reset on submit success
+- Optimistic update on stage change (revert on error)
+
+### Key Dependencies
+- Uses: AuthContext (current user), existing Button/Input components
+- Introduces: DealService (new), useDealList hook (new)
+```
+
+### 4. Create or Update ASCII Mockup
 
 - Add or update `## UI Mockup` section with ASCII art showing:
   - Component layout and structure
@@ -192,13 +226,13 @@ Include empty `## Learnings` section at the end.
 - Reference design tokens where applicable
 - Use persona vocabulary in all labels and placeholder text
 
-### 4. Create Component Stubs
+### 5. Create Component Stubs
 
 If the mockup references components that don't exist in `.specs/design-system/components/`:
 - Create **stub** files for each new component
 - Stubs include: name, purpose, status "pending implementation"
 
-### 5. Persona Revision Pass
+### 6. Persona Revision Pass
 
 After drafting the spec, re-read it through each persona's eyes and revise:
 
@@ -216,7 +250,7 @@ After drafting the spec, re-read it through each persona's eyes and revise:
 
 5. **Revise the spec.** Apply changes directly. Track what you changed so you can report it.
 
-### 6. Add Strategy Alignment (if strategy.md exists)
+### 7. Add Strategy Alignment (if strategy.md exists)
 
 If `.specs/strategy.md` has real content, add a `## Strategy Alignment` section:
 
@@ -239,7 +273,7 @@ Strategy says bottom-up PLG — individual adoption without IT involvement.
 Consider: defer to Phase N, or redesign for individual-first with optional SSO upgrade.
 ```
 
-### 7. Add Constitutional Compliance (if constitution.md exists)
+### 8. Add Constitutional Compliance (if constitution.md exists)
 
 If `.specs/constitution.md` has real rules, add a `## Constitutional Compliance` section.
 
@@ -259,7 +293,7 @@ For each rule in the constitution:
 | Error: Graceful degradation | ✅ Yes | Addressed in Scenario: API failure |
 ```
 
-### 8. Add User Journey
+### 9. Add User Journey
 
 Add a brief `## User Journey` section (3-5 lines) showing where this feature sits in the user's workflow. What screen do they come from? Where do they go after?
 
@@ -273,7 +307,7 @@ Add a brief `## User Journey` section (3-5 lines) showing where this feature sit
 
 This prevents orphaned features with no way in and no way out.
 
-### 9. Pause Point (Normal Mode Only)
+### 10. Pause Point (Normal Mode Only)
 
 **If Normal Mode (no --full flag):**
 - Do NOT write any implementation code
@@ -379,6 +413,24 @@ Then [error handling behavior]
 1. [Where user comes from]
 2. **[This feature]**
 3. [Where user goes next]
+
+## Technical Design
+
+### Data Model
+- [Entity]: { [key fields] }
+- Relationships: [how entities connect]
+
+### API Contracts
+<!-- Skip if purely client-side -->
+- `[METHOD] [endpoint]` — [purpose]. Body/Query: { [shape] }. Returns: [shape]. Errors: [codes]
+
+### State Management
+- [What state lives where: URL params, local state, global store, server cache]
+- [Key state transitions]
+
+### Key Dependencies
+- Uses: [existing modules, services, components]
+- Introduces: [new modules this feature creates]
 
 ## UI Mockup
 
@@ -528,13 +580,14 @@ After refactoring:
 2. Update stub status from "📝 Stub" to "✅ Documented"
 3. Or use `/design-component {name}` to auto-document
 
-### Step 8: Compound Learnings
-**Normal Mode**: Optional - user can run `/compound` at end of session
-**Full Mode**: Automatically run /compound after refactor
+### Step 8: Compound Learnings (Automatic — Always Runs)
+
+**Both Normal and Full Mode**: Always run `/compound` after refactor. This is not optional — learnings compound over time and failure signals prevent recurring mistakes.
 
 1. Run `/compound` to extract learnings from the final (refactored) code state
 2. Adds patterns/gotchas to spec's `## Learnings` section
 3. Cross-cutting patterns go to `.specs/learnings/{category}.md`
+4. **Failure signals** (drift, test retries, spec gaps, human corrections) go to BOTH the spec AND the category file with root cause and "fix for future" directive
 
 ### Step 9: Commit (Full Mode Only)
 
@@ -639,17 +692,18 @@ These signals enable the automated drift-check that runs after your commit.
    - Edit profile validation errors
    - Avatar upload
    - Cancel editing
-5. **Create ASCII mockups** (referencing design tokens):
+5. **Add technical design** — data model, API contracts, state management, key dependencies
+6. **Create ASCII mockups** (referencing design tokens):
    - View mode
    - Edit mode
    - Loading state
    - Error states
-6. **Add strategy alignment** (if strategy.md exists)
-7. **Add constitutional compliance** (if constitution.md exists)
-8. **Add user journey** (where does this fit in the app?)
-9. **Create component stubs**
-10. **Persona revision pass** — re-read through persona's eyes, revise, note changes
-11. **STOP** and wait for approval (Normal mode) or continue to tests → implement → compound → commit (Full mode)
+7. **Add strategy alignment** (if strategy.md exists)
+8. **Add constitutional compliance** (if constitution.md exists)
+9. **Add user journey** (where does this fit in the app?)
+10. **Create component stubs**
+11. **Persona revision pass** — re-read through persona's eyes, revise, note changes
+12. **STOP** and wait for approval (Normal mode) or continue to tests → implement → compound → commit (Full mode)
 
 ---
 

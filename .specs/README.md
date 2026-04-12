@@ -158,7 +158,7 @@ Example: `CMP-001`, `API-015`, `UT-003`
 2. Review and approve
 3. Tests written (failing)    → Update frontmatter: status: tested
 4. Implement until tests pass → Update frontmatter: status: implemented
-5. /compound                  → Extract learnings (optional)
+5. /compound                  → Extract learnings + failure signals (automatic after /tdd)
 6. /design-component {name}   → Fill in component stubs
 ```
 

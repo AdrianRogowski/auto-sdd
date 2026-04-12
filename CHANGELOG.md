@@ -2,6 +2,23 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.6.0 — Technical Design, Failure Signals, Auto-Compound
+
+### New
+- **Technical Design section in specs** — Every feature spec now includes a `## Technical Design` section between Gherkin scenarios and ASCII mockup. Contains Data Model (entities, fields, relationships), API Contracts (endpoints, shapes, errors), State Management (where state lives, transitions), and Key Dependencies (existing + new modules). This bridges the gap between WHAT (Gherkin) and HOW (implementation), reducing variance during the GREEN phase — two different agents reading the same spec will build roughly the same thing. The RED step reads Technical Design for test setup, and the GREEN step follows it as an implementation contract.
+- **Failure signal capture** — The `/compound` step now actively looks for failure signals alongside success patterns. Five failure types are tracked: `Failure (drift)` (spec↔code mismatch caught by drift check), `Failure (test-retry)` (tests that failed multiple times), `Failure (human-correction)` (user corrections to spec or implementation), `Failure (spec-gap)` (spec updated during implementation because it was incomplete), and `Failure (build)` (build/lint failures). Each failure must include root cause and a "Fix for future" directive. Failure signals go to BOTH the feature spec's `## Learnings` section AND the appropriate `.specs/learnings/{category}.md` file. The learnings index now has a "Recent Failure Signals" section.
+- **Failure tracking during TDD** — The GREEN step now explicitly tracks test retries and build failures. Both drift check steps (Layer 1 and 1b) track drift as a failure signal. These are collected and persisted by compound.
+
+### Changed
+- **`/compound` is now automatic after every `/tdd` cycle** — Previously optional in Normal mode (only automatic in Full mode). Now always runs at the end of every TDD cycle regardless of mode. This ensures learnings and failure signals accumulate over time instead of being lost when users forget to run `/compound` manually. Can still be invoked standalone for non-TDD sessions.
+- **`/spec-first` Step 8 (Compound)** — Changed from "Normal Mode: Optional" to "Both Normal and Full Mode: Always runs."
+- **`/tdd` Step 6 (Compound)** — Changed from "Run /compound" to "Automatic — Always Runs" with explicit failure signal collection.
+- **SPEC step numbering** — Now 10 steps (was 9): Technical Design is step 3, subsequent steps renumbered.
+- **CLAUDE.md** — Updated TDD step descriptions (RED reads Technical Design, GREEN tracks failures, drift checks track drift, compound always runs with failure signals), updated learnings section, updated feature spec format with Technical Design template, updated compound command description.
+- **`.cursor/rules/specs-workflow.mdc`** — Same updates as CLAUDE.md: TDD step descriptions, feature spec format, compound command description.
+- **`.specs/learnings/index.md`** — Added "Recent Failure Signals" section and Failure Signal Types table.
+- **`.specs/README.md`** — Updated compound description from "optional" to "automatic after /tdd".
+
 ## 2.5.0 — GTM Pipeline: Go-to-Market Planning & Early User Discovery
 
 ### New

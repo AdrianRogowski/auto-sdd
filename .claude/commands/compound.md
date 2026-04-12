@@ -17,6 +17,15 @@ Review what was accomplished in this session:
 - What would be done differently next time?
 - Any bugs encountered and how they were fixed?
 
+**Actively look for failure signals** — these are the highest-value learnings:
+- **Drift caught**: Did the drift check find mismatches between spec and code? What was the root cause?
+- **Test retries**: Did tests fail multiple times before passing? What was wrong — bad test, bad implementation, or bad spec?
+- **Human corrections**: Did the user correct the spec, reject a scenario, or redirect the implementation? What was the gap in understanding?
+- **Spec revisions**: Was the spec updated during implementation because it was wrong or incomplete? What was missing?
+- **Build/lint failures**: Did the build or linter fail? What pattern caused it?
+
+Failure signals prevent future agents from repeating the same mistakes. They are **more valuable** than success patterns.
+
 ### 2. Categorize Learnings
 
 #### Feature-Specific Learnings
@@ -77,6 +86,22 @@ Tell the user:
 | **Bug Fix** | "Fixed race condition by adding loading state check" | Feature spec |
 | **Performance** | "Memoize expensive calculations in useMemo" | `learnings/performance.md` |
 | **Testing** | "Mock timers for debounce tests" | `learnings/testing.md` |
+| **Failure (drift)** | "Spec said X but code did Y because spec was ambiguous" | Feature spec + `learnings/general.md` |
+| **Failure (test-retry)** | "Tests failed 3x because router wasn't mocked" | Feature spec + `learnings/testing.md` |
+| **Failure (human-correction)** | "User rejected scenario — anti-persona feature crept in" | Feature spec + `learnings/general.md` |
+| **Failure (spec-gap)** | "Tech design didn't specify pagination strategy" | Feature spec + `learnings/general.md` |
+| **Failure (build)** | "Build failed because of missing type export" | Feature spec + appropriate category |
+
+### Failure Signal Format
+
+Failure signals have a specific format — they must include root cause and a "fix for future" directive:
+
+```markdown
+### YYYY-MM-DD
+- **Failure (drift)**: Spec said "redirect to dashboard on login" but implementation redirected to profile page. Root cause: spec didn't specify the redirect target URL. **Fix for future specs**: Always specify redirect targets explicitly in Gherkin Then clauses.
+- **Failure (test-retry)**: Tests failed 3x because component used `useRouter` which wasn't mocked. **Fix for future tests**: Always mock Next.js router in component test setup files.
+- **Failure (human-correction)**: User rejected "Advanced Settings" scenario — anti-persona feature. **Fix for future specs**: Re-read anti-persona before adding "advanced" or "power user" scenarios.
+```
 
 ---
 
@@ -122,10 +147,16 @@ Add brief entries under "Recent Learnings":
 
 ---
 
+## When to Run
+
+**Automatic**: `/compound` runs automatically at the end of every `/tdd` cycle — both Normal and Full mode. You don't need to invoke it separately after TDD.
+
+**Manual**: Run `/compound` standalone at the end of non-TDD sessions (debugging, prototyping, refactoring) to capture learnings.
+
 ## When NOT to Compound
 
 - If the session was just reading/exploring (no implementation)
-- If no new learnings were discovered
+- If no new learnings or failure signals were discovered
 - If learnings are already documented
 
 ---
@@ -137,14 +168,16 @@ Add brief entries under "Recent Learnings":
 
 **Session**: Implemented user login feature
 
-### Learnings Captured: 3
+### Learnings Captured: 4 (2 patterns, 1 gotcha, 1 failure signal)
 
 #### Feature-Specific (added to login.feature.md)
 - **Gotcha**: Safari autofill requires onBlur handler as backup
 - **Pattern**: Debounce email validation to 300ms
+- **Failure (test-retry)**: Tests failed 2x because `useRouter` wasn't mocked in test setup. **Fix for future tests**: Always mock Next.js router in component tests.
 
 #### Cross-Cutting (added to learnings/)
 - **Testing**: Mock fetch globally in setupTests.ts → `testing.md`
+- **Failure (test-retry)**: Mock Next.js router in component tests → `testing.md`
 
 ### Files Updated
 - `.specs/features/auth/login.feature.md`
