@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fieldnote Design System Preview (Demo)</title>
+  <style>
+    :root {
+      --color-primary: #4f46e5;
+      --color-primary-hover: #4338ca;
+      --color-primary-light: #eef2ff;
+      --color-on-primary: #ffffff;
+      --color-canvas: #ffffff;
+      --color-surface: #f9fafb;
+      --color-surface-2: #f3f4f6;
+      --color-ink: #111827;
+      --color-ink-muted: #6b7280;
+      --color-ink-subtle: #9ca3af;
+      --color-border: #e5e7eb;
+      --color-success: #059669;
+      --color-warning: #d97706;
+      --color-error: #dc2626;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+      --text-display: 28px;
+      --text-headline: 20px;
+      --text-body: 14px;
+      --text-body-lg: 16px;
+      --text-label: 12px;
+      --radius-sm: 4px;
+      --radius-md: 6px;
+      --radius-lg: 8px;
+      --radius-full: 9999px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+    }
+
+    [data-theme="dark"] {
+      --color-primary: #6366f1;
+      --color-primary-hover: #818cf8;
+      --color-primary-light: #1e1b4b;
+      --color-canvas: #0f0f0f;
+      --color-surface: #171717;
+      --color-surface-2: #1f1f1f;
+      --color-ink: #ededed;
+      --color-ink-muted: #a1a1a1;
+      --color-ink-subtle: #737373;
+      --color-border: #2a2a2a;
+      --shadow-sm: none;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--text-body);
+      line-height: 1.5;
+      color: var(--color-ink);
+      background: var(--color-canvas);
+    }
+
+    .shell { max-width: 960px; margin: 0 auto; padding: var(--spacing-lg); }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--spacing-md);
+      margin-bottom: var(--spacing-lg);
+      padding-bottom: var(--spacing-md);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    header h1 { font-size: var(--text-headline); font-weight: 600; }
+    header p { color: var(--color-ink-muted); font-size: var(--text-body); margin-top: 4px; }
+    .demo-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    .theme-toggle {
+      display: flex;
+      gap: 4px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 4px;
+    }
+
+    .theme-toggle button {
+      border: none;
+      background: transparent;
+      color: var(--color-ink-muted);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: var(--text-label);
+      font-family: inherit;
+    }
+
+    .theme-toggle button.active {
+      background: var(--color-surface-2);
+      color: var(--color-ink);
+    }
+
+    nav.tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    nav.tabs a {
+      color: var(--color-ink-muted);
+      text-decoration: none;
+      font-size: var(--text-label);
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+    }
+
+    nav.tabs a:hover { color: var(--color-ink); background: var(--color-surface); }
+
+    section { margin-bottom: 48px; scroll-margin-top: 24px; }
+
+    .section-label {
+      font-size: var(--text-label);
+      font-weight: 500;
+      color: var(--color-ink-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    section h2 { font-size: var(--text-headline); font-weight: 600; margin-bottom: var(--spacing-md); }
+
+    .overview { color: var(--color-ink-muted); max-width: 60ch; }
+
+    .swatch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: var(--spacing-md);
+    }
+
+    .swatch {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      background: var(--color-surface);
+    }
+
+    .swatch-color { height: 72px; }
+    .swatch-meta { padding: 10px 12px; }
+    .swatch-meta strong { display: block; font-size: var(--text-label); margin-bottom: 2px; }
+    .swatch-meta span { font-size: 11px; color: var(--color-ink-subtle); font-family: var(--font-mono); }
+    .swatch-meta p { font-size: 11px; color: var(--color-ink-muted); margin-top: 6px; }
+
+    .type-sample { margin-bottom: var(--spacing-md); padding-bottom: var(--spacing-md); border-bottom: 1px solid var(--color-border); }
+    .type-sample:last-child { border-bottom: none; }
+    .type-meta { font-size: var(--text-label); color: var(--color-ink-subtle); font-family: var(--font-mono); margin-bottom: 6px; }
+    .type-display { font-size: var(--text-display); font-weight: 600; line-height: 1.15; letter-spacing: -0.02em; }
+    .type-headline { font-size: var(--text-headline); font-weight: 600; }
+    .type-body-lg { font-size: var(--text-body-lg); }
+    .type-body { font-size: var(--text-body); }
+    .type-mono { font-family: var(--font-mono); font-size: 12px; background: var(--color-surface); padding: 8px 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+
+    .component-row { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; margin-bottom: var(--spacing-md); }
+
+    .btn {
+      font-family: inherit;
+      font-size: var(--text-body);
+      font-weight: 500;
+      padding: 8px 14px;
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+
+    .btn-primary { background: var(--color-primary); color: var(--color-on-primary); }
+    .btn-primary:hover { background: var(--color-primary-hover); }
+    .btn-secondary { background: var(--color-canvas); color: var(--color-ink); border-color: var(--color-border); }
+    .btn-ghost { background: var(--color-surface); color: var(--color-ink-muted); border-color: var(--color-border); }
+
+    .input {
+      font-family: inherit;
+      font-size: var(--text-body);
+      padding: 8px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-canvas);
+      color: var(--color-ink);
+      min-width: 220px;
+    }
+
+    .card-demo {
+      background: var(--color-canvas);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-md);
+      max-width: 420px;
+    }
+
+    .card-demo h3 { font-size: var(--text-body-lg); font-weight: 600; margin-bottom: 6px; }
+    .card-demo p { color: var(--color-ink-muted); margin-bottom: var(--spacing-md); font-size: var(--text-body); }
+
+    .table-demo {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--text-body);
+      margin-top: var(--spacing-md);
+    }
+
+    .table-demo th {
+      text-align: left;
+      font-size: var(--text-label);
+      font-weight: 500;
+      color: var(--color-ink-muted);
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .table-demo td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .table-demo tr.selected { background: var(--color-primary-light); }
+
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+    }
+    .badge-success { background: color-mix(in srgb, var(--color-success) 15%, transparent); color: var(--color-success); }
+    .badge-warning { background: color-mix(in srgb, var(--color-warning) 15%, transparent); color: var(--color-warning); }
+    .badge-error { background: color-mix(in srgb, var(--color-error) 15%, transparent); color: var(--color-error); }
+
+    .spacing-demo { display: flex; align-items: flex-end; gap: var(--spacing-md); flex-wrap: wrap; }
+    .spacing-block { background: var(--color-primary); opacity: 0.7; border-radius: 2px; }
+    .spacing-label { font-size: 11px; font-family: var(--font-mono); color: var(--color-ink-subtle); margin-top: 4px; text-align: center; }
+
+    .rules { display: grid; gap: var(--spacing-md); }
+    @media (min-width: 640px) { .rules { grid-template-columns: 1fr 1fr; } }
+
+    .rules-do, .rules-dont {
+      padding: var(--spacing-md);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+    }
+    .rules-do { background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface)); }
+    .rules-dont { background: color-mix(in srgb, var(--color-error) 8%, var(--color-surface)); }
+    .rules h3 { font-size: var(--text-body-lg); margin-bottom: var(--spacing-sm); }
+    .rules ul { padding-left: 18px; color: var(--color-ink-muted); font-size: var(--text-body); }
+    .rules li { margin-bottom: 6px; }
+
+    footer {
+      margin-top: 48px;
+      padding-top: var(--spacing-md);
+      border-top: 1px solid var(--color-border);
+      font-size: var(--text-label);
+      color: var(--color-ink-subtle);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <h1>Fieldnote Design System <span class="demo-badge">SDD demo</span></h1>
+        <p>Professional · Table-first B2B ops UI, single indigo accent</p>
+      </div>
+      <div class="theme-toggle" role="group" aria-label="Theme">
+        <button type="button" data-theme-set="light" class="active">Light</button>
+        <button type="button" data-theme-set="dark">Dark</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Sections">
+      <a href="#overview">Overview</a>
+      <a href="#palette">Palette</a>
+      <a href="#typography">Typography</a>
+      <a href="#components">Components</a>
+      <a href="#spacing">Spacing</a>
+      <a href="#rules">Do&apos;s &amp; Don&apos;ts</a>
+    </nav>
+
+    <section id="overview">
+      <p class="section-label">00 — Overview</p>
+      <h2>Visual direction</h2>
+      <p class="overview">Fieldnote helps ops teams track workflows and SLAs. The UI is calm and scannable: white canvas, cool gray surfaces, indigo for primary actions and selected rows. Body text stays 14px; decorative chrome is minimal.</p>
+    </section>
+
+    <section id="palette">
+      <p class="section-label">01 — Color palette</p>
+      <h2>Colors</h2>
+      <div class="swatch-grid">
+        <div class="swatch">
+          <div class="swatch-color" style="background: #4f46e5;"></div>
+          <div class="swatch-meta">
+            <strong>Primary</strong>
+            <span>#4f46e5</span>
+            <p>Create workflow, save, links</p>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #4338ca;"></div>
+          <div class="swatch-meta">
+            <strong>Primary hover</strong>
+            <span>#4338ca</span>
+            <p>Button hover state</p>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #eef2ff; border-bottom: 1px solid #e5e7eb;"></div>
+          <div class="swatch-meta">
+            <strong>Primary light</strong>
+            <span>#eef2ff</span>
+            <p>Selected table rows</p>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #ffffff; border-bottom: 1px solid #e5e7eb;"></div>
+          <div class="swatch-meta">
+            <strong>Canvas</strong>
+            <span>#ffffff</span>
+            <p>Page background</p>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #f9fafb;"></div>
+          <div class="swatch-meta">
+            <strong>Surface 1</strong>
+            <span>#f9fafb</span>
+            <p>Panels, zebra stripes</p>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #111827;"></div>
+          <div class="swatch-meta">
+            <strong>Ink</strong>
+            <span>#111827</span>
+            <p>Headings and body</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="typography">
+      <p class="section-label">02 — Typography</p>
+      <h2>Type scale</h2>
+      <div class="type-sample">
+        <div class="type-meta">display · 28px / 600</div>
+        <div class="type-display">No workflows yet</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-meta">headline · 20px / 600</div>
+        <div class="type-headline">Active workflows</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-meta">body · 14px / 400</div>
+        <div class="type-body">Review handoffs, checklists, and SLA timers across your team.</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-meta">mono · workflow IDs</div>
+        <div class="type-mono">wf_8f3a2b1c · SLA 4h 12m remaining</div>
+      </div>
+    </section>
+
+    <section id="components">
+      <p class="section-label">03 — Components</p>
+      <h2>UI primitives</h2>
+      <div class="component-row">
+        <button type="button" class="btn btn-primary">Create workflow</button>
+        <button type="button" class="btn btn-secondary">Export</button>
+        <button type="button" class="btn btn-ghost">Filter</button>
+      </div>
+      <div class="component-row">
+        <input class="input" type="search" placeholder="Search workflows…" aria-label="Search workflows" />
+        <span class="badge badge-success">On track</span>
+        <span class="badge badge-warning">At risk</span>
+        <span class="badge badge-error">Overdue</span>
+      </div>
+      <div class="card-demo">
+        <h3>Weekly handoff</h3>
+        <p>3 steps · Owner: Ops team · Due Friday 5pm</p>
+        <table class="table-demo" aria-label="Workflow steps">
+          <thead>
+            <tr><th>ID</th><th>Step</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            <tr class="selected">
+              <td><span class="type-mono" style="padding:0;border:none;background:none;">wf_001</span></td>
+              <td>Review queue</td>
+              <td><span class="badge badge-success">On track</span></td>
+            </tr>
+            <tr>
+              <td><span class="type-mono" style="padding:0;border:none;background:none;">wf_002</span></td>
+              <td>Sign off</td>
+              <td><span class="badge badge-warning">At risk</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="margin-top: 16px;">
+          <button type="button" class="btn btn-primary">Save changes</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="spacing">
+      <p class="section-label">04 — Spacing</p>
+      <h2>Spacing scale (4px base)</h2>
+      <div class="spacing-demo">
+        <div><div class="spacing-block" style="width: 4px; height: 4px;"></div><div class="spacing-label">xs 4</div></div>
+        <div><div class="spacing-block" style="width: 8px; height: 8px;"></div><div class="spacing-label">sm 8</div></div>
+        <div><div class="spacing-block" style="width: 16px; height: 16px;"></div><div class="spacing-label">lg 16</div></div>
+        <div><div class="spacing-block" style="width: 24px; height: 24px;"></div><div class="spacing-label">xl 24</div></div>
+        <div><div class="spacing-block" style="width: 32px; height: 32px;"></div><div class="spacing-label">xxl 32</div></div>
+      </div>
+    </section>
+
+    <section id="rules">
+      <p class="section-label">05 — Guardrails</p>
+      <h2>Do&apos;s and Don&apos;ts</h2>
+      <div class="rules">
+        <div class="rules-do">
+          <h3>Do</h3>
+          <ul>
+            <li>Use primary for one main action per panel</li>
+            <li>Keep table body at 14px</li>
+            <li>Right-align numeric SLA columns</li>
+            <li>Show workflow ID in mono</li>
+          </ul>
+        </div>
+        <div class="rules-dont">
+          <h3>Don&apos;t</h3>
+          <ul>
+            <li>Don&apos;t use pill primary buttons in app chrome</li>
+            <li>Don&apos;t add a second accent for decoration</li>
+            <li>Don&apos;t use display type in table cells</li>
+            <li>Don&apos;t rely on color alone for status</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Golden demo · <code>examples/demo/</code> · Pattern inspo: <a href="https://getdesign.md/linear.app/design-md" style="color: inherit;">Linear on getdesign.md</a>
+    </footer>
+  </div>
+
+  <script>
+    document.querySelectorAll("[data-theme-set]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var theme = btn.getAttribute("data-theme-set");
+        document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "");
+        document.querySelectorAll("[data-theme-set]").forEach(function (b) {
+          b.classList.toggle("active", b === btn);
+        });
+      });
+    });
+  </script>
+</body>
+</html>

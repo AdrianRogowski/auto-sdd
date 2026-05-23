@@ -15,8 +15,13 @@ This directory contains the spec-driven development documentation for this proje
 │   └── {mirrors test structure}
 │       └── {Component}.tests.md
 │
-├── design-system/         # Design tokens and component patterns
-│   ├── tokens.md          # Color, spacing, typography tokens
+├── design-system/         # Design system (tokens + DESIGN.md + preview)
+│   ├── tokens.md          # Spec shorthand: colors, spacing, typography
+│   ├── DESIGN.md          # Agent-native spec (Google DESIGN.md format)
+│   ├── preview.html       # Visual showcase (generated per project)
+│   ├── preview.template.html
+│   ├── references/        # Archetype DESIGN.md examples
+│   ├── PLAN.md            # Design system enhancement plan
 │   ├── components/        # Component pattern documentation
 │   │   └── {component}.md
 │   └── layouts/           # Page/section layout patterns
@@ -66,7 +71,7 @@ updated: YYYY-MM-DD
 # Feature Name
 
 **Source File**: `path/to/implementation.tsx`
-**Design System**: `.specs/design-system/tokens.md`
+**Design System**: `.specs/design-system/tokens.md` · `.specs/design-system/DESIGN.md` · `.specs/design-system/preview.html`
 
 ## Feature: [Name]
 
@@ -224,7 +229,7 @@ The mapping provides a routing table for the agent to find specs, tests, and com
 | `/spec-first` | Create or update feature spec + mockup |
 | `/spec-init` | Bootstrap existing codebase |
 | `/compound` | Extract learnings from session |
-| `/design-tokens` | Manage design tokens |
+| `/design-tokens` | Create DESIGN.md, tokens.md, preview.html |
 | `/design-component` | Document component patterns |
 | `/check-coverage` | Find gaps in coverage |
 | `/catch-drift` | Detect spec ↔ code drift |

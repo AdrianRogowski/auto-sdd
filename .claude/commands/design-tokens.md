@@ -1,66 +1,49 @@
 ---
-description: Create or update personality-driven design tokens
+description: Create or update personality-driven design system (tokens + DESIGN.md + preview)
 ---
 
-Manage design tokens: $ARGUMENTS
+Manage design system: $ARGUMENTS
 
-## Actions
+## Outputs (always sync all three)
 
-### `init` or no args — Create tailored tokens
+- `.specs/design-system/DESIGN.md` — Google spec, agents read for UI
+- `.specs/design-system/tokens.md` — spec/mockup shorthand
+- `.specs/design-system/preview.html` — visual showcase (from `preview.template.html`)
 
-**Do NOT stamp a generic template.** Derive tokens from context.
+References: `.specs/design-system/references/*.design.md` · Golden example: `examples/demo/` · Catalog: `examples/README.md`
 
-1. **Read context**: `.specs/vision.md` (app purpose, design principles), `.specs/personas/*.md` (patience, technical level), existing CSS/theme files. If nothing exists, ask: What kind of app? What vibe? Brand color?
+## `init` / no args — Create
 
-2. **Determine personality** based on context:
+1. Read strategy, vision, personas, existing theme
+2. Pick personality → read `references/{personality}.design.md` + `examples/demo/*`
+3. Optional: getdesign.md inspo per `examples/README.md`
+4. Write **DESIGN.md** (YAML + Overview…Do's/Don'ts) with **project** values, archetype **structure**
+5. Write **tokens.md** summary from DESIGN.md
+6. Generate **preview.html** from `preview.template.html` + DESIGN.md tokens
+7. `npx @google/design.md lint .specs/design-system/DESIGN.md` (warn if missing)
+8. Update `.cursor/rules/design-tokens.mdc`
 
-| Personality | Radii | Spacing | Palette | Example Apps |
-|-------------|-------|---------|---------|-------------|
-| **Professional** | 2-6px | Tight (4px base) | Muted, high-contrast neutrals | Linear, Jira |
-| **Friendly** | 8-12px | Comfortable (8px base) | Warm, 2-3 accents | Notion, Slack |
-| **Minimal** | 4-8px | Generous whitespace | Near-monochrome | iA Writer, Apple |
-| **Bold** | 12-16px+ | Generous | Vivid, high saturation | Stripe, Vercel |
-| **Technical** | 0-4px | Tight-compact | Cool neutrals, functional only | GitHub, Grafana |
+## Personalities → references
 
-3. **Build palette from one color**:
-   - Primary: from brand or personality default
-   - `primary-hover`: 10% darker, `primary-light`: 90% lighter
-   - Neutrals: tint grays with primary hue (pure gray looks dead)
-   - Semantic (success/warning/error): match saturation to overall palette
-   - Check: text on background ≥ 4.5:1 contrast
+| Personality | Reference | getdesign inspo |
+|-------------|-----------|-----------------|
+| Professional | professional.design.md | linear.app, ibm, resend |
+| Minimal | minimal.design.md | linear.app, apple |
+| Friendly | friendly.design.md | notion, slack, airtable |
+| Bold | bold.design.md | stripe, vercel, framer |
+| Technical | technical.design.md | supabase, cursor, posthog |
 
-4. **Constrain to v1 minimums**:
-   - Colors: primary + hover + light, 3-4 neutrals, 3 semantic
-   - Typography: 1 font family, 4-5 sizes, 3 weights
-   - Spacing: 6 values on consistent multiplier
-   - Radii: 3 + full
-   - Shadows: 2 (resting + elevated)
+## Subcommands
 
-5. **Write** `.specs/design-system/tokens.md` with personality, rationale, and "What's Intentionally Missing"
-6. **Create** `.cursor/rules/design-tokens.mdc` cursor rule
+- `update {token} to {value}` — sync DESIGN.md, tokens.md, preview.html
+- `preview` — regenerate preview.html only
+- `inspiration {brand}` — getdesign add + merge patterns into project DESIGN.md
+- `import from {file}` — extract → all three artifacts
 
-### `update {token} to {value}` — Update specific token
+## Rails
 
-Update token value. If changing primary, also update primary-hover and primary-light. Check contrast still passes.
+- Archetypes teach depth; strategy/personas own values
+- Don't copy brand colors from getdesign without user intent
+- DESIGN.md is source of truth for agents; tokens.md for specs
 
-### `import from {file}` — Import from existing config
-
-Extract from `tailwind.config.js` or CSS variables file. Identify personality from the values. Write tokens.md.
-
-## Design Principles (Rails for Dumber Models)
-
-- **Tinted neutrals** over pure gray. Mix 5-10% of primary hue into grays.
-- **One font family** for v1. System stack if unsure.
-- **4px base** for data-dense UIs, **8px base** for consumer UIs.
-- **Radii match personality.** Don't mix large and small in the same UI.
-- **Two shadows** is enough. One for cards, one for modals.
-- **Fewer tokens = better system.** 5 spacing values used consistently beats 12 used randomly.
-
-## Output
-
-After changes, show:
-- Personality chosen and why
-- Primary color and derivation source
-- Token counts by category
-- What's intentionally deferred
-- Files created/updated
+See `.cursor/commands/design-tokens.md` for full steps.

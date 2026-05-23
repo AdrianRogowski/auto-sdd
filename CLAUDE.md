@@ -205,7 +205,7 @@ These are created once and inform every feature. Each reads the output of the co
 | `/vision` | `.specs/vision.md` | App purpose, users, tech stack, design principles |
 | `/personas` | `.specs/personas/*.md` | Who uses this (vocabulary, patience, frustrations) |
 | `/constitution` | `.specs/constitution.md` | Non-negotiable constraints: security, data handling, error patterns |
-| `/design-tokens` | `.specs/design-system/tokens.md` | Personality-driven tokens derived from vision + personas |
+| `/design-tokens` | `.specs/design-system/` (DESIGN.md, tokens.md, preview.html) | Personality-driven system from vision + personas + archetype references |
 | `/gtm` | `.specs/gtm.md` | GTM playbook: channels, outreach templates, launch timeline |
 | `/find-early-users` | `.specs/gtm/prospects.md` | Specific people + conversations to reach out to now |
 
@@ -320,22 +320,29 @@ Run `/personas` or they're auto-suggested on first `/spec-first` run. Most proje
 
 ## Design System
 
-Design tokens are in `.specs/design-system/tokens.md`, created by `/design-tokens`.
+Three project outputs, created by `/design-tokens`:
+
+| File | Purpose |
+|------|---------|
+| `.specs/design-system/DESIGN.md` | Google DESIGN.md spec — agents read before UI work |
+| `.specs/design-system/tokens.md` | Shorthand for specs and ASCII mockups |
+| `.specs/design-system/preview.html` | Visual showcase — open in browser |
+
+Archetype references: `.specs/design-system/references/*.design.md`  
+Optional inspiration: [getdesign.md](https://getdesign.md/) via `npx getdesign@latest add {brand}`
 
 ### How It Works
 
 `/design-tokens` doesn't stamp a generic template. It:
-1. Reads vision + personas for context
-2. Determines a **personality** (Professional / Friendly / Minimal / Bold / Technical)
-3. Derives a tailored palette from personality + brand color
-4. Constrains to v1 minimums (fewer tokens = more consistency)
-5. Writes rationale explaining the choices
+1. Reads strategy, vision, and personas
+2. Reads matching archetype reference for structure and depth
+3. Determines personality and derives palette from brand + context
+4. Writes DESIGN.md + tokens.md + preview.html with project-specific values
+5. Validates with `npx @google/design.md lint` when available
 
-### Token Reference
+### For Agents
 
-When implementing UI, use token names from `tokens.md` (not hardcoded values). The specific tokens depend on the project — read `tokens.md` for the actual names and values.
-
-**Common categories:** Colors (primary, neutrals, semantic), Typography (1 font family, 4-5 sizes, 3 weights), Spacing (6 values), Radii (3 + full), Shadows (2).
+Read **DESIGN.md** before UI (YAML tokens, component variants, Do's/Don'ts). Use **tokens.md** in feature specs and mockups.
 
 ### When `/spec-first` Runs on Greenfield
 
@@ -353,10 +360,10 @@ If ASCII mockup references a component that doesn't exist in `.specs/design-syst
 
 ### Design System Maintenance
 
-`.specs/design-system/tokens.md` is the source of truth. When tokens change:
-1. Update `tokens.md`
-2. Update `.cursor/rules/design-tokens.mdc` if token names changed
-3. Update affected component documentation
+`.specs/design-system/DESIGN.md` is the source of truth for agents. When tokens change:
+1. Update DESIGN.md
+2. Sync tokens.md and regenerate preview.html (`/design-tokens preview`)
+3. Update `.cursor/rules/design-tokens.mdc` if token names changed
 
 ---
 

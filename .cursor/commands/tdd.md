@@ -57,7 +57,8 @@ Run the full TDD cycle from an approved spec. Use this after reviewing a spec cr
 
 1. Implement the feature incrementally, following the `## Technical Design` contract (data model, API shapes, state management)
 2. Use design tokens from `.specs/design-system/tokens.md`
-3. Follow component patterns from `.specs/design-system/components/`
+3. Read `.specs/design-system/DESIGN.md` before implementing UI
+4. Follow component patterns from `.specs/design-system/components/`
 4. Run tests frequently — loop until ALL pass
 5. **Track failure signals**: If tests fail multiple times, note the root cause mentally (bad test, bad implementation, ambiguous spec, missing mock). These feed into compound.
 6. Update spec frontmatter: `status: implemented`, add components to `components: []`

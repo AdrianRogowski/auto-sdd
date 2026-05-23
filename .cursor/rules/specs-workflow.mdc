@@ -134,7 +134,11 @@ If user includes "full", "auto", "no stops", or "don't pause":
 ├── test-suites/           # Test documentation
 │   └── {mirrors test dir structure}
 ├── design-system/         # Design tokens and patterns
-│   ├── tokens.md          # Colors, spacing, typography (personality-driven)
+│   ├── tokens.md          # Spec shorthand (personality-driven)
+│   ├── DESIGN.md          # Agent-native design spec (Google DESIGN.md format)
+│   ├── preview.html       # Visual showcase (open in browser)
+│   ├── preview.template.html
+│   ├── references/        # Archetype DESIGN.md examples + getdesign mapping
 │   └── components/        # Component pattern docs
 │       └── {component}.md
 ├── learnings/             # Cross-cutting patterns (by category)
@@ -166,7 +170,7 @@ These are project-level infrastructure created once and referenced by every feat
  │     │
  │     ├──▶ /constitution → creates .specs/constitution.md (reads strategy + vision)
  │     │
- │     └──▶ /design-tokens → creates .specs/design-system/tokens.md
+ │     └──▶ /design-tokens → creates tokens.md + DESIGN.md + preview.html
  │          (reads vision + personas to derive personality + values)
  │
  ├──▶ /roadmap → reads strategy for prioritization
@@ -261,11 +265,13 @@ The design system is created once by `/design-tokens` and informed by vision + p
 ### How `/design-tokens` Works
 
 It doesn't stamp a generic template. It:
-1. Reads `.specs/vision.md` and `.specs/personas/` for context
-2. Determines a **personality** (Professional / Friendly / Minimal / Bold / Technical)
-3. Derives a **tailored palette** from the personality + brand color
-4. Constrains to **v1 minimums** (fewer tokens, add more later)
-5. Writes rationale explaining why these choices were made
+1. Reads `.specs/vision.md`, `.specs/personas/`, and `.specs/strategy.md` for context
+2. Reads a matching archetype from `.specs/design-system/references/{personality}.design.md`
+3. Optionally uses [getdesign.md](https://getdesign.md/) inspiration (`npx getdesign@latest add {brand}`)
+4. Writes **DESIGN.md** (Google spec), **tokens.md** (spec shorthand), and **preview.html** (visual review)
+5. Creates `.cursor/rules/design-tokens.mdc`
+
+Agents read **DESIGN.md** for UI; specs use **tokens.md** in ASCII mockups.
 
 ### When `/spec-first` Runs on Greenfield
 
@@ -527,6 +533,9 @@ New components/modules should get a 2-3 letter prefix.
 | Feature specs | `.specs/features/{domain}/{feature}.feature.md` |
 | Test suite docs | `.specs/test-suites/{mirrors test directory}` |
 | Design tokens | `.specs/design-system/tokens.md` |
+| DESIGN.md (agents) | `.specs/design-system/DESIGN.md` |
+| Design preview | `.specs/design-system/preview.html` |
+| Archetype references | `.specs/design-system/references/` |
 | Component patterns | `.specs/design-system/components/{component}.md` |
 | Mapping | `.specs/mapping.md` **(auto-generated)** |
 | Documentation queue | `.specs/doc-queue.md` (created by `/spec-init` or `doc-loop-local.sh`) |

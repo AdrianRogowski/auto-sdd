@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><!-- PROJECT_NAME --> Design System Preview</title>
+  <style>
+    /* Replace all :root values from .specs/design-system/DESIGN.md YAML */
+    :root {
+      --color-primary: #4f46e5;
+      --color-primary-hover: #4338ca;
+      --color-on-primary: #ffffff;
+      --color-canvas: #ffffff;
+      --color-surface: #f9fafb;
+      --color-surface-2: #f3f4f6;
+      --color-ink: #111827;
+      --color-ink-muted: #6b7280;
+      --color-ink-subtle: #9ca3af;
+      --color-border: #e5e7eb;
+      --color-success: #059669;
+      --color-warning: #d97706;
+      --color-error: #dc2626;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+      --text-display: 32px;
+      --text-headline: 24px;
+      --text-body: 14px;
+      --text-body-lg: 16px;
+      --text-label: 12px;
+      --radius-sm: 4px;
+      --radius-md: 6px;
+      --radius-lg: 8px;
+      --radius-full: 9999px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+    }
+
+    [data-theme="dark"] {
+      --color-canvas: #0f0f0f;
+      --color-surface: #171717;
+      --color-surface-2: #1f1f1f;
+      --color-ink: #ededed;
+      --color-ink-muted: #a1a1a1;
+      --color-ink-subtle: #737373;
+      --color-border: #2a2a2a;
+      --shadow-sm: none;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--text-body);
+      line-height: 1.5;
+      color: var(--color-ink);
+      background: var(--color-canvas);
+    }
+
+    .shell { max-width: 960px; margin: 0 auto; padding: var(--spacing-lg); }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--spacing-md);
+      margin-bottom: var(--spacing-lg);
+      padding-bottom: var(--spacing-md);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    header h1 { font-size: var(--text-headline); font-weight: 600; }
+    header p { color: var(--color-ink-muted); font-size: var(--text-body); margin-top: 4px; }
+
+    .theme-toggle {
+      display: flex;
+      gap: 4px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 4px;
+    }
+
+    .theme-toggle button {
+      border: none;
+      background: transparent;
+      color: var(--color-ink-muted);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: var(--text-label);
+      font-family: inherit;
+    }
+
+    .theme-toggle button.active {
+      background: var(--color-surface-2);
+      color: var(--color-ink);
+    }
+
+    nav.tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    nav.tabs a {
+      color: var(--color-ink-muted);
+      text-decoration: none;
+      font-size: var(--text-label);
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+    }
+
+    nav.tabs a:hover { color: var(--color-ink); background: var(--color-surface); }
+
+    section { margin-bottom: 48px; scroll-margin-top: 24px; }
+
+    .section-label {
+      font-size: var(--text-label);
+      font-weight: 500;
+      color: var(--color-ink-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    section h2 { font-size: var(--text-headline); font-weight: 600; margin-bottom: var(--spacing-md); }
+
+    .overview { color: var(--color-ink-muted); max-width: 60ch; }
+
+    .swatch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: var(--spacing-md);
+    }
+
+    .swatch {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      background: var(--color-surface);
+    }
+
+    .swatch-color { height: 72px; }
+    .swatch-meta { padding: 10px 12px; }
+    .swatch-meta strong { display: block; font-size: var(--text-label); margin-bottom: 2px; }
+    .swatch-meta span { font-size: 11px; color: var(--color-ink-subtle); font-family: var(--font-mono); }
+    .swatch-meta p { font-size: 11px; color: var(--color-ink-muted); margin-top: 6px; }
+
+    .type-sample { margin-bottom: var(--spacing-md); padding-bottom: var(--spacing-md); border-bottom: 1px solid var(--color-border); }
+    .type-sample:last-child { border-bottom: none; }
+    .type-meta { font-size: var(--text-label); color: var(--color-ink-subtle); font-family: var(--font-mono); margin-bottom: 6px; }
+    .type-display { font-size: var(--text-display); font-weight: 600; line-height: 1.15; letter-spacing: -0.02em; }
+    .type-headline { font-size: var(--text-headline); font-weight: 600; }
+    .type-body-lg { font-size: var(--text-body-lg); }
+    .type-body { font-size: var(--text-body); }
+    .type-mono { font-family: var(--font-mono); font-size: 12px; background: var(--color-surface); padding: 8px 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+
+    .component-row { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; margin-bottom: var(--spacing-md); }
+
+    .btn {
+      font-family: inherit;
+      font-size: var(--text-body);
+      font-weight: 500;
+      padding: 8px 14px;
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+
+    .btn-primary { background: var(--color-primary); color: var(--color-on-primary); }
+    .btn-primary:hover { background: var(--color-primary-hover); }
+    .btn-secondary { background: var(--color-surface); color: var(--color-ink); border-color: var(--color-border); }
+    .btn-ghost { background: transparent; color: var(--color-ink); border-color: var(--color-border); }
+
+    .input {
+      font-family: inherit;
+      font-size: var(--text-body);
+      padding: 8px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-canvas);
+      color: var(--color-ink);
+      min-width: 220px;
+    }
+
+    .card-demo {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-md);
+      max-width: 320px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .card-demo h3 { font-size: var(--text-body-lg); font-weight: 600; margin-bottom: 6px; }
+    .card-demo p { color: var(--color-ink-muted); margin-bottom: var(--spacing-md); }
+
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+    }
+    .badge-success { background: color-mix(in srgb, var(--color-success) 15%, transparent); color: var(--color-success); }
+    .badge-warning { background: color-mix(in srgb, var(--color-warning) 15%, transparent); color: var(--color-warning); }
+    .badge-error { background: color-mix(in srgb, var(--color-error) 15%, transparent); color: var(--color-error); }
+
+    .spacing-demo { display: flex; align-items: flex-end; gap: var(--spacing-md); flex-wrap: wrap; }
+    .spacing-block { background: var(--color-primary); opacity: 0.7; border-radius: 2px; }
+    .spacing-label { font-size: 11px; font-family: var(--font-mono); color: var(--color-ink-subtle); margin-top: 4px; text-align: center; }
+
+    .rules { display: grid; gap: var(--spacing-md); }
+    @media (min-width: 640px) { .rules { grid-template-columns: 1fr 1fr; } }
+
+    .rules-do, .rules-dont {
+      padding: var(--spacing-md);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+    }
+    .rules-do { background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface)); }
+    .rules-dont { background: color-mix(in srgb, var(--color-error) 8%, var(--color-surface)); }
+    .rules h3 { font-size: var(--text-body-lg); margin-bottom: var(--spacing-sm); }
+    .rules ul { padding-left: 18px; color: var(--color-ink-muted); }
+    .rules li { margin-bottom: 6px; }
+
+    footer {
+      margin-top: 48px;
+      padding-top: var(--spacing-md);
+      border-top: 1px solid var(--color-border);
+      font-size: var(--text-label);
+      color: var(--color-ink-subtle);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <h1><!-- PROJECT_NAME --> Design System</h1>
+        <p><!-- PERSONALITY --> · <!-- ONE_LINE_RATIONALE --></p>
+      </div>
+      <div class="theme-toggle" role="group" aria-label="Theme">
+        <button type="button" data-theme-set="light" class="active">Light</button>
+        <button type="button" data-theme-set="dark">Dark</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Sections">
+      <a href="#overview">Overview</a>
+      <a href="#palette">Palette</a>
+      <a href="#typography">Typography</a>
+      <a href="#components">Components</a>
+      <a href="#spacing">Spacing</a>
+      <a href="#rules">Do&apos;s &amp; Don&apos;ts</a>
+    </nav>
+
+    <section id="overview">
+      <p class="section-label">00 — Overview</p>
+      <h2>Visual direction</h2>
+      <p class="overview"><!-- Paste Overview summary from DESIGN.md --></p>
+    </section>
+
+    <section id="palette">
+      <p class="section-label">01 — Color palette</p>
+      <h2>Colors</h2>
+      <div class="swatch-grid">
+        <!-- Add one .swatch per key color from DESIGN.md -->
+        <div class="swatch">
+          <div class="swatch-color" style="background: var(--color-primary);"></div>
+          <div class="swatch-meta">
+            <strong>Primary</strong>
+            <span><!-- #hex --></span>
+            <p>Primary actions, links, focus</p>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: var(--color-canvas); border-bottom: 1px solid var(--color-border);"></div>
+          <div class="swatch-meta">
+            <strong>Canvas</strong>
+            <span><!-- #hex --></span>
+            <p>Page background</p>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: var(--color-surface);"></div>
+          <div class="swatch-meta">
+            <strong>Surface</strong>
+            <span><!-- #hex --></span>
+            <p>Cards, panels</p>
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: var(--color-ink);"></div>
+          <div class="swatch-meta">
+            <strong>Ink</strong>
+            <span><!-- #hex --></span>
+            <p>Primary text</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="typography">
+      <p class="section-label">02 — Typography</p>
+      <h2>Type scale</h2>
+      <div class="type-sample">
+        <div class="type-meta">display · <!-- size/weight --></div>
+        <div class="type-display">The quick brown fox</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-meta">headline · <!-- size/weight --></div>
+        <div class="type-headline">Section heading</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-meta">body · <!-- size/weight --></div>
+        <div class="type-body">Body text for forms, tables, and descriptions.</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-meta">mono · code / IDs</div>
+        <div class="type-mono">api_key_8f3a2b1c · GET /v1/items</div>
+      </div>
+    </section>
+
+    <section id="components">
+      <p class="section-label">03 — Components</p>
+      <h2>UI primitives</h2>
+      <div class="component-row">
+        <button type="button" class="btn btn-primary">Primary</button>
+        <button type="button" class="btn btn-secondary">Secondary</button>
+        <button type="button" class="btn btn-ghost">Ghost</button>
+      </div>
+      <div class="component-row">
+        <input class="input" type="text" placeholder="Placeholder text" aria-label="Demo input" />
+        <span class="badge badge-success">Success</span>
+        <span class="badge badge-warning">Warning</span>
+        <span class="badge badge-error">Error</span>
+      </div>
+      <div class="card-demo">
+        <h3>Card title</h3>
+        <p>Supporting copy using muted ink color.</p>
+        <button type="button" class="btn btn-primary">Action</button>
+      </div>
+    </section>
+
+    <section id="spacing">
+      <p class="section-label">04 — Spacing</p>
+      <h2>Spacing scale</h2>
+      <div class="spacing-demo">
+        <!-- Set width/height inline from DESIGN.md spacing tokens -->
+        <div><div class="spacing-block" style="width: 8px; height: 8px;"></div><div class="spacing-label">sm</div></div>
+        <div><div class="spacing-block" style="width: 16px; height: 16px;"></div><div class="spacing-label">md</div></div>
+        <div><div class="spacing-block" style="width: 24px; height: 24px;"></div><div class="spacing-label">lg</div></div>
+      </div>
+    </section>
+
+    <section id="rules">
+      <p class="section-label">05 — Guardrails</p>
+      <h2>Do&apos;s and Don&apos;ts</h2>
+      <div class="rules">
+        <div class="rules-do">
+          <h3>Do</h3>
+          <ul>
+            <!-- Paste from DESIGN.md Do section -->
+            <li>Use primary for one main action per view</li>
+          </ul>
+        </div>
+        <div class="rules-dont">
+          <h3>Don&apos;t</h3>
+          <ul>
+            <!-- Paste from DESIGN.md Don't section -->
+            <li>Don&apos;t mix conflicting radii on the same screen</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Generated by SDD <code>/design-tokens</code> · Source: <code>.specs/design-system/DESIGN.md</code>
+    </footer>
+  </div>
+
+  <script>
+    document.querySelectorAll("[data-theme-set]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var theme = btn.getAttribute("data-theme-set");
+        document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "");
+        document.querySelectorAll("[data-theme-set]").forEach(function (b) {
+          b.classList.toggle("active", b === btn);
+        });
+      });
+    });
+  </script>
+</body>
+</html>

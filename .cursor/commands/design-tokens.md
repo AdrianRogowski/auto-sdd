@@ -1,196 +1,227 @@
-# Design Tokens Management
+# Design Tokens & Design System
 
-Create or update the design tokens for your project. This command produces a tailored design system, not a generic template.
+Create or update the design system for your project. Produces a **tailored** system with three outputs: spec-friendly tokens, agent-native DESIGN.md, and a visual preview page.
 
 ## Usage
 
 ```
-/design-tokens                              # Create tokens (reads vision + personas for context)
-/design-tokens init                         # Same as above
-/design-tokens update primary to #FF6B6B    # Update specific tokens
-/design-tokens import from tailwind.config  # Extract from existing config
-/design-tokens import from styles/vars.css  # Extract from CSS variables
+/design-tokens                                    # Create full design system
+/design-tokens init                              # Same as above
+/design-tokens update primary to #FF6B6B          # Update tokens (syncs all artifacts)
+/design-tokens import from tailwind.config        # Extract from existing config
+/design-tokens import from styles/vars.css        # Extract from CSS variables
+/design-tokens inspiration linear.app             # Optional: pull getdesign.md reference, then customize
+/design-tokens preview                            # Regenerate preview.html from DESIGN.md
 ```
 
 ---
 
-## Behavior: Create New Tokens
+## Outputs
 
-If `.specs/design-system/tokens.md` doesn't exist (or is still the unmodified template):
+| File | Audience | Purpose |
+|------|----------|---------|
+| `.specs/design-system/tokens.md` | Specs, ASCII mockups | Lightweight tables for `/spec-first` |
+| `.specs/design-system/DESIGN.md` | Coding agents | [Google DESIGN.md spec](https://github.com/google-labs-code/design.md): YAML + rationale + Do's/Don'ts |
+| `.specs/design-system/preview.html` | Humans | Open in browser: palette, typography, components |
+
+**Bundled references** (read, never copy verbatim): `.specs/design-system/references/*.design.md`  
+**Golden output example**: `.specs/design-system/examples/demo/` (synced DESIGN.md + tokens.md + preview.html)  
+See `.specs/design-system/examples/README.md` for getdesign.md brand picks and `.specs/design-system/references/_README.md` for personality mapping.
+
+---
+
+## Behavior: Create New Design System
+
+If `.specs/design-system/tokens.md` doesn't exist or is still the unmodified template:
 
 ### Step 1: Read Context
 
-Before choosing any values, read whatever exists:
-
 | File | What You Learn |
 |------|---------------|
-| `.specs/vision.md` | App purpose, target users, design principles, what kind of tool this is |
-| `.specs/personas/*.md` | Who uses this — their context, patience level, technical sophistication |
-| `package.json` / project files | Tech stack (Tailwind? CSS modules? styled-components?) |
-| Existing CSS/theme files | Any values already in use |
+| `.specs/strategy.md` | Target customer, buying motion, brand positioning |
+| `.specs/vision.md` | App purpose, design principles, tool category |
+| `.specs/personas/*.md` | Patience level, vocabulary, technical level |
+| `package.json` / theme files | Tech stack, existing colors |
+| `.specs/design-system/references/` | Archetype structure and depth |
 
-If none of these exist, ask the user:
+If insufficient context, ask:
 
 ```
-I need a bit of context to create a good design system:
+I need context to create your design system:
 
-1. What kind of app is this? (e.g., "enterprise dashboard", "consumer social app", "developer tool")
-2. One word for the vibe: professional / playful / minimal / bold / warm / technical
-3. Do you have a brand color? (hex, or describe it — "dark blue", "forest green")
+1. What kind of app is this?
+2. Vibe: professional / friendly / minimal / bold / technical
+3. Brand color? (hex or description)
 
-Or just describe it however you want and I'll derive the rest.
+Or run /vision and /personas first.
 ```
 
 ### Step 2: Determine Personality
 
-Based on context, classify the app into one of these personality profiles. This drives every token choice:
+| Personality | Archetype reference | getdesign.md inspo (optional) |
+|-------------|---------------------|-------------------------------|
+| **Professional** | `references/professional.design.md` | linear.app, ibm, resend |
+| **Minimal** | `references/minimal.design.md` | linear.app, apple |
+| **Friendly** | `references/friendly.design.md` | notion, slack, airtable |
+| **Bold** | `references/bold.design.md` | stripe, vercel, framer |
+| **Technical** | `references/technical.design.md` | supabase, cursor, posthog |
 
-| Personality | Radii | Spacing | Palette | Typography | Shadow | Example Apps |
-|-------------|-------|---------|---------|------------|--------|-------------|
-| **Professional** | Small (2-6px) | Tight (4px base) | Muted, high-contrast neutrals, single accent | System fonts or clean sans-serif, smaller sizes | Subtle, low elevation | Jira, Linear, Bloomberg Terminal |
-| **Friendly** | Medium-Large (8-12px) | Comfortable (8px base) | Warm, approachable, 2-3 accent colors | Rounded sans-serif, generous sizes | Medium, cards feel lifted | Notion, Slack, Spotify |
-| **Minimal** | Small-Medium (4-8px) | Generous whitespace (8px base, large section gaps) | Near-monochrome, one careful accent | Clean, lots of weight contrast | Almost none, borders instead | Apple.com, Linear, iA Writer |
-| **Bold / Consumer** | Large (12-16px+) | Generous (8px base) | Vivid, high saturation, gradient-friendly | Large display type, heavy/light contrast | Large, dramatic | Vercel, Stripe, Arc browser |
-| **Technical / Data** | Minimal (0-4px) | Tight-compact (4px base) | Cool neutrals, functional color only | Monospace accents, small body text | Flat, border-driven | GitHub, Grafana, terminal apps |
+State your choice and why (from vision/personas/strategy).
 
-Pick the closest match. If the vision says "professional and clean" → Professional. If personas are non-technical → Friendly. State your choice and why.
+### Step 3: Read Archetype + Golden Example + Optional Inspiration
 
-### Step 3: Build the Palette
+1. **Always read** `.specs/design-system/references/{personality}.design.md` (structure)
+2. **Always read** `.specs/design-system/examples/demo/` — synced DESIGN.md, tokens.md, preview.html showing target output quality
+3. See `.specs/design-system/examples/README.md` for getdesign.md brand picks (Linear, Notion, Stripe, Supabase, etc.)
+4. **Optional**: If user wants brand inspo:
+   ```bash
+   npx getdesign@latest add {brand}
+   ```
+   Read installed `DESIGN.md`, adapt patterns into project files. Do not copy brand identity.
 
-**Start from one color and derive the rest.** Do not pick colors independently.
+### Step 4: Build the Palette
 
-1. **Primary color**: From brand, or derive from personality:
-   - Professional → deep blue, slate, indigo
-   - Friendly → teal, coral, warm purple
-   - Minimal → black or single muted accent
-   - Bold → vivid blue, purple, orange
-   - Technical → gray-blue, green (terminal vibes)
+Start from one color; derive the rest (same rules as before):
 
-2. **Derive the system from primary**:
-   - `primary-hover`: 10% darker
-   - `primary-light`: 90% lighter (for backgrounds)
-   - `secondary`: Complementary or analogous to primary (not random)
-   - Neutrals: Tint your grays with a hint of the primary hue (warm primary → warm grays, cool primary → cool grays). Pure gray (#6B7280) looks dead next to a warm primary.
-   - Semantic colors (success/warning/error): Use standard hues (green/amber/red) but adjust saturation to match overall palette energy. Muted palette → muted semantics. Vivid palette → vivid semantics.
+- Primary from brand or personality default
+- `primary-hover`, surfaces, tinted neutrals, semantic colors
+- WCAG AA: text on background ≥ 4.5:1
 
-3. **Check contrast**: `color-text` on `color-background` must be at least 4.5:1 (WCAG AA). `color-text-secondary` must be at least 3:1 for large text.
+### Step 5: Write `.specs/design-system/DESIGN.md`
 
-### Step 4: Choose Constraints (Fewer Tokens = Better System)
+Follow [Google DESIGN.md spec](https://github.com/google-labs-code/design.md):
 
-**For a v1, you need less than you think:**
+**YAML frontmatter** (required groups for v1):
+- `version: alpha`, `name`, `description`
+- `colors`, `typography`, `rounded`, `spacing`
+- `components` with at least: `button-primary`, `button-primary-hover`, `button-secondary`, `card`, `input`
 
-| Category | v1 Needs | Skip Until v2 |
-|----------|----------|----------------|
-| Colors | Primary + hover + light, 3-4 neutrals, 3 semantic | Secondary color, gradients, dark mode |
-| Typography | 1 font family, 4-5 sizes (sm, base, lg, xl, 2xl), 3 weights | Display fonts, 2xl+, font-light |
-| Spacing | 6 values (1, 2, 3, 4, 6, 8) | spacing-0, spacing-5, spacing-10+ |
-| Radii | 3 values (sm, md, lg) + full | none, xl, 2xl |
-| Shadows | 2 values (sm, lg) | md, xl |
-| Z-index | 3 layers (base, dropdown, modal) | sticky, toast, max |
-| Animation | 1 duration, 1 easing | Multiple speeds |
+**Markdown body** (in order):
+1. Overview (atmosphere, when to use)
+2. Colors
+3. Typography
+4. Layout
+5. Elevation & Depth
+6. Shapes
+7. Components
+8. Do's and Don'ts
 
-**Be opinionated.** A design system with 5 spacing values that are always used correctly beats one with 12 values used inconsistently. You can always add more later.
+Values must come from **this project's** strategy/vision/personas, not the archetype hex codes.
 
-### Step 5: Write tokens.md
+### Step 6: Write `.specs/design-system/tokens.md`
 
-Write `.specs/design-system/tokens.md` with:
-- The chosen personality and a one-line rationale
-- Every token with its value AND usage guidance
-- A "Why These Choices" section explaining the derivation
-- A "What's Intentionally Missing" section so the user knows what's deferred
+Derive a **summary** from DESIGN.md for specs:
+- Personality + rationale
+- Token tables mapping to DESIGN.md (use names agents will see in mockups)
+- "Why These Choices" and "What's Intentionally Missing"
 
-### Step 6: Create Cursor Rule
+Keep v1 constrained (see table below).
 
-Create/update `.cursor/rules/design-tokens.mdc` with the actual token names for this project.
+| Category | v1 Needs | Defer to v2 |
+|----------|----------|-------------|
+| Colors | Primary + hover + light, neutrals, semantic | Secondary, dark mode tokens |
+| Typography | 1 family, 4-5 sizes, 3 weights | Display fonts |
+| Spacing | 6 values on one base | spacing-0, extras |
+| Radii | sm, md, lg, full | xl, 2xl |
+| Shadows | sm, lg (if used) | md, xl |
 
-### Step 7: Report
+### Step 7: Generate `.specs/design-system/preview.html`
+
+1. Copy structure from `.specs/design-system/preview.template.html`
+2. Replace `:root` CSS variables with values from DESIGN.md YAML
+3. Fill Overview, swatch labels, Do's/Don'ts from DESIGN.md prose
+4. Set project name and personality in header
+5. Add dark theme overrides if DESIGN.md defines dark surfaces
+
+Open locally: `open .specs/design-system/preview.html` (macOS) or open file in browser.
+
+### Step 8: Validate & Cursor Rule
+
+```bash
+npx @google/design.md lint .specs/design-system/DESIGN.md
+```
+
+If CLI unavailable, note in report. Fix obvious spec violations.
+
+Create/update `.cursor/rules/design-tokens.mdc` with this project's token names. Mention DESIGN.md and preview.html in the rule.
+
+### Step 9: Report
 
 ```markdown
 ## Design System Created
 
-**Personality**: [Professional / Friendly / Minimal / Bold / Technical]
-**Rationale**: [1 sentence — "Vision says 'data-dense but not cluttered' for brokers, so Professional with tight spacing"]
+**Personality**: [name]
+**Rationale**: [1 sentence from vision/personas]
+**Archetype reference**: references/[personality].design.md
+**Inspiration**: [getdesign brand or "none"]
 
-**Primary**: [color swatch description + hex]
-**Derived from**: [vision.md / user input / persona context]
-
-### Token Counts
-- Colors: [n] tokens
-- Typography: [n] tokens (1 family)
-- Spacing: [n] values
-- Total: [n] tokens
-
-### Intentionally Deferred
-- Dark mode
-- Secondary accent color
-- [etc.]
-
-Files created:
-- `.specs/design-system/tokens.md`
+### Files
+- `.specs/design-system/DESIGN.md` — agents read before UI work
+- `.specs/design-system/tokens.md` — specs and ASCII mockups
+- `.specs/design-system/preview.html` — open in browser to review
 - `.cursor/rules/design-tokens.mdc`
+
+### Review
+Open preview.html and confirm colors/type match intent before `/spec-first`.
+
+### Lint
+[pass / skipped / warnings]
 ```
 
 ---
 
 ## Behavior: Update Existing Tokens
 
-If tokens.md already exists and has been customized:
+When `tokens.md` or `DESIGN.md` already exists:
 
-1. Read current tokens.md
+1. Read current `DESIGN.md` and `tokens.md`
 2. Apply requested changes
-3. Check that changes don't break contrast ratios
-4. If token names changed, update `.cursor/rules/design-tokens.mdc`
-5. List what changed, including any derived values that shifted (e.g., changing primary should also update primary-hover and primary-light)
+3. **Sync all three artifacts** (DESIGN.md is source of truth for agents; tokens.md summary; regenerate preview.html)
+4. Re-run lint if possible
+5. Update `.cursor/rules/design-tokens.mdc` if names changed
+
+---
+
+## Behavior: `preview` subcommand
+
+Regenerate only `.specs/design-system/preview.html` from current `DESIGN.md` using `preview.template.html`. Use after hand-editing DESIGN.md.
+
+---
+
+## Behavior: `inspiration {brand}` subcommand
+
+1. Run `npx getdesign@latest add {brand}` in project root (or read if already present)
+2. Read installed `DESIGN.md` alongside project files
+3. Merge useful patterns into `.specs/design-system/DESIGN.md` while keeping project-specific values
+4. Sync tokens.md and preview.html
+5. Do not leave a duplicate root `DESIGN.md` if project canonical path is `.specs/design-system/DESIGN.md` (move or merge, then delete stray copy)
 
 ---
 
 ## Behavior: Import from Existing Config
 
-### From Tailwind (`tailwind.config.js` / `tailwind.config.ts`)
-1. Read the theme/extend section
-2. Map Tailwind values to token names
-3. Identify the personality from the values (small radii + tight spacing = Professional, etc.)
-4. Write tokens.md with the imported values
-
-### From CSS Variables
-1. Read the CSS file
-2. Map `--color-*`, `--spacing-*` etc. to token names
-3. Write tokens.md
+Same as before, but output all three artifacts:
+1. Extract values from Tailwind/CSS
+2. Write DESIGN.md (full spec)
+3. Derive tokens.md
+4. Generate preview.html
 
 ---
 
 ## Design Principles for Token Selection
 
-These are the rails a model should follow when making choices:
-
-### Color
-- **Tinted neutrals** always look better than pure gray. Mix 5-10% of your primary hue into your grays.
-- **3 is enough for v1**: primary, a neutral scale, and semantic colors. Adding a secondary color is a v2 concern.
-- **Light backgrounds**: Use very light tints of your primary for highlights/selections, not a separate color. This creates cohesion.
-- **Dark text on light**: `#111827` (near-black with blue tint) is almost always better than pure `#000000`.
-
-### Typography
-- **One font family** for v1. Two fonts is a design decision that takes expertise. If unsure, use the system font stack: `-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`. It's free, fast, and native-feeling.
-- **Skip display/heading fonts** unless the vision specifically calls for personality in typography.
-- **Size scale**: The jump between sizes should be noticeable. If `base` is 16px, `lg` should be 18-20px, not 17px.
-
-### Spacing
-- **4px or 8px base**: 4px for data-dense UIs (tables, dashboards). 8px for consumer/content UIs. Don't use both.
-- **Consistent multiplier**: If your base is 4px, your scale should be 4, 8, 12, 16, 24, 32. Not 4, 8, 10, 16, 20, 32.
-
-### Radius
-- **Match the personality**, not trends. Rounded corners (12px+) feel friendly. Sharp corners (2-4px) feel professional. Mixing large and small radii in the same UI looks broken.
-- **Rule of thumb**: Inner radius = outer radius - padding. If a card has `radius-lg` (8px) and `padding-4` (16px), elements inside should use `radius-sm` or `radius-md`.
-
-### Shadows
-- **Fewer is better**. Most UIs need exactly 2: a subtle one for cards at rest, and a larger one for elevated elements (modals, dropdowns).
-- **Match shadow color to background warmth**. Warm backgrounds → `rgba(0,0,0,0.08)` (lighter). Cool backgrounds → `rgba(0,0,0,0.12)` (slightly heavier).
+(Unchanged — tinted neutrals, one font v1, 4px vs 8px base, personality-matched radii, two shadows max.)
 
 ---
 
 ## Integration
 
-- `/spec-first` references tokens in ASCII mockups
-- `/design-component` documents which tokens components use
-- `/spec-init` detects existing tokens in codebase
-- `/vision` establishes the personality that drives token choices
+| Command | Uses design system |
+|---------|-------------------|
+| `/spec-first` | `tokens.md` in mockups; instruct agents to read `DESIGN.md` for UI |
+| `/design-component` | Token names from DESIGN.md / tokens.md |
+| `/spec-init` | Detect existing tokens, DESIGN.md, preview |
+| `/vision` | Personality input for `/design-tokens` |
+| `/tdd` | Implement UI per DESIGN.md + feature spec |
+
+When implementing UI, agents must read `.specs/design-system/DESIGN.md` before writing components.

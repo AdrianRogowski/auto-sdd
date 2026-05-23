@@ -3,43 +3,52 @@ description: Design token usage guidelines
 alwaysApply: true
 ---
 
-# Design Tokens
+# Design System
 
-This project uses a design token system defined in `.specs/design-system/tokens.md`.
+This project uses a design system with three files:
 
-## Token Reference
+| File | When to read |
+|------|--------------|
+| `.specs/design-system/DESIGN.md` | **Before any UI work** — YAML tokens, component variants, Do's/Don'ts |
+| `.specs/design-system/tokens.md` | ASCII mockups in specs, quick token lookup |
+| `.specs/design-system/preview.html` | Human visual review (open in browser) |
 
-When implementing UI, use these token names rather than hardcoded values:
+Archetype references live in `.specs/design-system/references/` (SDD template only).
+
+## Agent rule
+
+When implementing UI, read `.specs/design-system/DESIGN.md` first. Use token names and component definitions from its YAML frontmatter. Follow Do's and Don'ts in the markdown body.
+
+## Token Reference (default names — customize per project)
 
 ### Colors
 - `color-primary` - Primary brand color
-- `color-secondary` - Secondary brand color
-- `color-background` - Page background
+- `color-primary-hover` - Hover state
+- `color-background` / `canvas` - Page background
 - `color-surface` - Card/panel backgrounds
-- `color-text` - Primary text
+- `color-text` / `ink` - Primary text
 - `color-text-secondary` - Muted text
-- `color-error` - Error states
-- `color-success` - Success states
-- `color-warning` - Warning states
+- `color-error`, `color-success`, `color-warning` - Semantic
 
 ### Typography
-- `text-xs` through `text-5xl` - Font sizes
-- `font-normal`, `font-medium`, `font-semibold`, `font-bold` - Weights
+- `text-sm` through `text-2xl` - Font sizes
+- `font-normal`, `font-medium`, `font-semibold` - Weights
 
 ### Spacing
-- `spacing-1` through `spacing-16` - Spacing scale
+- `spacing-1` through `spacing-8` - Spacing scale
 
 ### Border Radius
-- `radius-sm`, `radius-md`, `radius-lg`, `radius-xl`, `radius-full`
+- `radius-sm`, `radius-md`, `radius-lg`, `radius-full`
 
 ### Shadows
-- `shadow-sm`, `shadow-md`, `shadow-lg`, `shadow-xl`
+- `shadow-sm`, `shadow-lg`
 
-## Implementation Guidelines
+## Implementation
+
+Use token names from **this project's** `tokens.md` and `DESIGN.md`, not hardcoded values.
 
 ### Tailwind CSS
 ```jsx
-// Use semantic class names that map to tokens
 <button className="bg-primary text-white rounded-md px-4 py-2">
 ```
 
@@ -48,20 +57,15 @@ When implementing UI, use these token names rather than hardcoded values:
 .button {
   background: var(--color-primary);
   border-radius: var(--radius-md);
-  padding: var(--spacing-2) var(--spacing-4);
 }
 ```
-
-## When Building UI
-
-1. Reference tokens from `.specs/design-system/tokens.md`
-2. Use token names in ASCII mockups (in feature specs)
-3. Implement using actual token values
-4. Document token usage in component docs
 
 ## Updates
 
 When tokens change:
-1. Update `.specs/design-system/tokens.md`
-2. Update this rule if token names change
-3. Run `/design-tokens` to sync changes
+1. Update `.specs/design-system/DESIGN.md` (source of truth)
+2. Sync `.specs/design-system/tokens.md`
+3. Run `/design-tokens preview` or full update to regenerate `preview.html`
+4. Update this rule if token names changed
+
+Validate: `npx @google/design.md lint .specs/design-system/DESIGN.md`

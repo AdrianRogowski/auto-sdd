@@ -6,17 +6,19 @@ Patterns for UI and design system in this codebase.
 
 ## Token Usage
 
-<!-- When to use which tokens, overrides -->
-
-_No learnings yet._
-
----
+- **DESIGN.md is source of truth for agents** — `tokens.md` is spec shorthand; keep them in sync via `/design-tokens`.
+- **Read archetype references** before generating a new system — structure (component variants, Do's/Don'ts) matters as much as hex values.
+- **preview.html** — regenerate after DESIGN.md edits (`/design-tokens preview`).
 
 ## Component Patterns
 
-<!-- Common component structures, composition -->
+- Define button/input/card variants in DESIGN.md YAML (`button-primary-hover`, etc.) not only in prose.
 
-_No learnings yet._
+## External References
+
+- Archetypes: `.specs/design-system/references/`
+- Optional brand depth: [getdesign.md](https://getdesign.md/) — adapt, don't copy identity
+- Format: [Google DESIGN.md spec](https://github.com/google-labs-code/design.md)
 
 ---
 

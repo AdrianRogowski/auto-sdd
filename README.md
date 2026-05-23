@@ -416,15 +416,21 @@ User personas live in `.specs/personas/` and inform every feature spec. They're 
 
 ## Design System
 
-The design system lives in `.specs/design-system/tokens.md` and is created by `/design-tokens`.
+Created by `/design-tokens` after vision and personas:
 
-Unlike generic design token templates, `/design-tokens` derives a **tailored** system:
+| File | Use |
+|------|-----|
+| `DESIGN.md` | Agents read for UI (Google spec, Do's/Don'ts) |
+| `tokens.md` | Specs and ASCII mockups |
+| `preview.html` | Human visual review in browser |
 
-1. **Reads context** — vision.md (app purpose, design principles), personas (patience, technical level)
+Archetype references in `references/` teach structure; [getdesign.md](https://getdesign.md/) optional for extra inspiration.
+
+1. **Reads context** — strategy, vision, personas, archetype reference
 2. **Determines personality** — Professional, Friendly, Minimal, Bold, or Technical
-3. **Derives palette** — starts from one primary color, derives neutrals (tinted, not pure gray), semantic colors matched to palette energy
-4. **Constrains to v1** — fewer tokens used consistently beats many tokens used randomly
-5. **Documents rationale** — explains *why* these choices, not just what they are
+3. **Writes three artifacts** — DESIGN.md (full), tokens.md (summary), preview.html (visual)
+4. **Constrains to v1** — fewer tokens used consistently beats many used randomly
+5. **Documents rationale** — in DESIGN.md Overview and tokens.md "Why These Choices"
 
 | Personality | Radii | Spacing | Example Apps |
 |-------------|-------|---------|-------------|

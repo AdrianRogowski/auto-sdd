@@ -2,6 +2,22 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.7.0 — Design System: DESIGN.md, Preview, Archetype References
+
+### New
+- **Three design system outputs** — `/design-tokens` now creates `.specs/design-system/DESIGN.md` (Google DESIGN.md spec for agents), `tokens.md` (spec shorthand), and `preview.html` (single-page visual showcase).
+- **Archetype references** — `.specs/design-system/references/*.design.md` (Professional, Minimal, Friendly, Bold, Technical) teach structure and depth before generating project-specific systems.
+- **Golden demo** — `.specs/design-system/examples/demo/` (Fieldnote: synced DESIGN.md, tokens.md, preview.html). Pattern inspo from Linear via getdesign.md.
+- **getdesign catalog** — `.specs/design-system/examples/README.md` with install commands for Linear, Notion, Stripe, Supabase, and other picks by personality.
+- **`preview.template.html`** — Shell for generating project preview pages (palette, typography, components, Do's/Don'ts, light/dark toggle).
+- **`.specs/design-system/PLAN.md`** — Design system enhancement plan and success criteria.
+
+### Changed
+- **`/design-tokens`** — Reads archetype references; syncs all three artifacts on create/update; new `preview` and `inspiration` subcommands; validates with `@google/design.md lint` when available.
+- **`.cursor/rules/design-tokens.mdc`** — Agents must read DESIGN.md before UI work.
+- **`/spec-first` and `/tdd`** — Reference DESIGN.md for implementation; mention preview.html for human review.
+- **CLAUDE.md, README.md, specs-workflow.mdc, .specs/README.md** — Updated design system documentation.
+
 ## 2.6.0 — Technical Design, Failure Signals, Auto-Compound
 
 ### New

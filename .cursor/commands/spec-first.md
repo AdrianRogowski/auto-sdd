@@ -133,10 +133,12 @@ Run /personas to create user personas for better specs.
 #### Design System
 
 If `.specs/design-system/tokens.md` doesn't exist or is still the unmodified template:
-- Auto-create tokens via the `/design-tokens` flow (reads vision, determines personality, produces tailored tokens)
-- Inform user: "Created design system. Customize tokens.md as needed."
+- Auto-create via `/design-tokens` (reads vision/personas, archetype references, produces `tokens.md` + `DESIGN.md` + `preview.html`)
+- Inform user: "Created design system. Open `.specs/design-system/preview.html` to review. Agents use `DESIGN.md` for UI."
 
-If it exists and is customized, read it for token names and personality.
+If it exists and is customized:
+- Read `tokens.md` for token names in ASCII mockups
+- Note `.specs/design-system/DESIGN.md` for implementers (component variants, Do's/Don'ts)
 
 #### Learnings
 
@@ -385,7 +387,7 @@ updated: YYYY-MM-DD
 # Feature Name
 
 **Source File**: `path/to/feature.tsx` (planned)
-**Design System**: `.specs/design-system/tokens.md`
+**Design System**: `.specs/design-system/tokens.md` · Agents: `.specs/design-system/DESIGN.md` · Preview: `.specs/design-system/preview.html`
 **Personas**: `.specs/personas/primary.md`, `.specs/personas/anti-persona.md`
 
 ## Feature: [Name]
@@ -535,7 +537,8 @@ The steps below follow the `/tdd` command flow. See `/tdd` for the standalone ve
 ### Step 3: GREEN — Implement Until Tests Pass
 1. Implement feature incrementally
 2. Use design tokens from `.specs/design-system/tokens.md`
-3. Follow component patterns from design system
+3. Read `.specs/design-system/DESIGN.md` before implementing UI (component variants, Do's/Don'ts)
+4. Follow component patterns from design system
 4. Run tests frequently
 5. Loop until all tests pass
 6. Update spec frontmatter: `status: implemented`, add components to `components: []`
@@ -722,6 +725,8 @@ Creating design system:
 ✓ Read vision.md for context
 ✓ Determined personality: Friendly (consumer-facing signup flow)
 ✓ Created .specs/design-system/tokens.md
+✓ Created .specs/design-system/DESIGN.md
+✓ Created .specs/design-system/preview.html
 
 Proceeding with feature spec...
 ```
