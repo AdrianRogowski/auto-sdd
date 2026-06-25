@@ -54,7 +54,8 @@ Based on context, determine which constraint categories apply:
 | Strategy says enterprise / B2B | Heavy auth, data handling, audit |
 | Strategy says PLG / consumer | Lighter auth, heavier UX constraints |
 | Tech stack has auth (NextAuth, Clerk, etc.) | Auth constraints apply |
-| Tech stack has database (Prisma, Drizzle, etc.) | Data handling constraints apply |
+| Tech stack has database (Prisma, Drizzle, etc.) | Data handling + schema/migration constraints apply |
+| Project has a migrations directory | Schema & Migrations constraints apply (see `.specs/migrations.md`) |
 | Vision mentions API / integrations | API security constraints apply |
 | Strategy mentions handling PII / financial data | Privacy and compliance constraints |
 | Internal tool only | Lighter overall, focus on error handling |
@@ -104,6 +105,15 @@ _Version: 1.0 | Last updated: YYYY-MM-DD_
 - [ ] No PII written to application logs
 - [ ] User data deletion cascades to all related records
 - [ ] File uploads validated for type and size before processing
+
+## Schema & Migrations
+
+_Include when the project has a database. Conventions are recorded in `.specs/migrations.md` (run `/infer-migrations`)._
+
+- [ ] Every schema change ships as a migration following `.specs/migrations.md` conventions
+- [ ] Migrations are reversible (ship a down/revert) or explicitly marked irreversible with a reason
+- [ ] Destructive changes (drop column/table, type narrowing, new NOT NULL on existing) use expand-contract, never single-step
+- [ ] Data backfills run in a separate, re-runnable migration — not blocking a schema DDL step
 
 ## API Security
 

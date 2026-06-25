@@ -50,6 +50,7 @@ Automatically detect:
 - **Test Patterns**: `*.test.ts`, `test_*.py`, `*_test.go`
 - **Source Directories**: `src/`, `app/`, `lib/`, `components/`
 - **Existing Design System**: Look for CSS variables, Tailwind config, theme files
+- **Migration Tooling**: Look for an ORM/migration tool (Prisma, Drizzle, Knex, TypeORM, Alembic, Django, Rails, Flyway, Sqitch, golang-migrate, raw SQL) and a migrations directory
 
 ## Step 2: Scan and Categorize
 
@@ -154,6 +155,18 @@ Check for existing design system:
 If found: Create `.specs/design-system/tokens.md` documenting existing tokens.
 If not found: Create default tokens file.
 
+## Step 9: Detect & Document Migration Strategy
+
+If the project has a database (a migrations directory and/or ORM config was detected in Step 1), run the `/infer-migrations` flow as part of discovery — same "detect existing → document it" pattern as Step 8 for the design system.
+
+1. Follow `/infer-migrations` (read the migrations dir, infer tool, naming, ordering, reversibility, backfill habits, expand-contract patterns).
+2. Write `.specs/migrations.md` (the playbook) and `.cursor/rules/migrations.mdc` (thin, always-applied summary).
+3. Reconcile the detected apply command against `MIGRATION_CMD` in `.env.local` and flag any mismatch.
+
+If no database tooling is detected, skip this step and note it (do not create the file).
+
+This means new specs created after `/spec-init` automatically get a `## Migration Plan` for schema changes, and `/tdd` can run its migration verify step against the documented conventions.
+
 ---
 
 ## After Discovery
@@ -174,6 +187,10 @@ Environment
 Baseline
 ├── Tests: 142 passing, 6 failing (pre-existing)
 └── Build: clean
+
+Migrations
+├── Tool: Prisma (prisma/migrations/)
+└── Playbook: .specs/migrations.md
 
 Documentation Queue
 ├── Items to document: 42
@@ -205,6 +222,8 @@ Next steps:
 | `.specs/codebase-summary.md` | Overview of entire codebase + baseline status |
 | `.specs/doc-queue.md` | Ordered list of items to document (parsed by doc-loop-local.sh) |
 | `.specs/design-system/tokens.md` | Design tokens (if not exists) |
+| `.specs/migrations.md` | Migration playbook (if a database is detected) |
+| `.cursor/rules/migrations.mdc` | Always-applied migration rules summary (if a database is detected) |
 
 ---
 

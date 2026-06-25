@@ -115,6 +115,15 @@ Read .specs/design-system/tokens.md for:
 - Token names and values
 ```
 
+### Read Migration Playbook (if the feature may touch the schema)
+```
+Read .specs/migrations.md for:
+- Tool, naming, reversibility, and backfill conventions
+- Apply command (must match MIGRATION_CMD)
+If it's missing and the feature changes the Data Model, run /infer-migrations first.
+The spec's ## Migration Plan and the /tdd migration verify step follow this playbook.
+```
+
 ### Read Related Specs
 ```
 For each completed dependency:

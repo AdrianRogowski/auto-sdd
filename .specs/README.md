@@ -228,6 +228,7 @@ The mapping provides a routing table for the agent to find specs, tests, and com
 |---------|---------|
 | `/spec-first` | Create or update feature spec + mockup |
 | `/spec-init` | Bootstrap existing codebase |
+| `/infer-migrations` | Discover/define DB migration strategy → `.specs/migrations.md` |
 | `/compound` | Extract learnings from session |
 | `/design-tokens` | Create DESIGN.md, tokens.md, preview.html |
 | `/design-component` | Document component patterns |

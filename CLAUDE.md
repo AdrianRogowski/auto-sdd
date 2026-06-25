@@ -131,6 +131,17 @@ When the user says any of these, **invoke `/constitution`**:
 | "non-negotiables" | Run `/constitution` |
 | "audit specs" | Run `/constitution --audit` |
 
+When the user says any of these, **invoke `/infer-migrations`**:
+
+| User says | Action |
+|-----------|--------|
+| "infer migrations" | Run `/infer-migrations` |
+| "migration strategy" | Run `/infer-migrations` |
+| "migration playbook" | Run `/infer-migrations` |
+| "how do we do migrations" | Run `/infer-migrations` |
+| "document our migrations" | Run `/infer-migrations` |
+| "schema change strategy" | Run `/infer-migrations` |
+
 ### Full Mode Triggers
 
 If user includes "full", "auto", "no stops", or "don't pause":
@@ -145,6 +156,7 @@ If user includes "full", "auto", "no stops", or "don't pause":
 .specs/
 ├── strategy.md            # Business strategy (created by /strategy)
 ├── constitution.md        # Non-negotiable constraints (created by /constitution)
+├── migrations.md          # Migration playbook (created by /infer-migrations)
 ├── vision.md              # App vision (created by /vision or /clone-app)
 ├── roadmap.md             # Feature roadmap (single source of truth)
 ├── personas/              # User personas (inform every spec)
@@ -618,6 +630,7 @@ Then [expected result]
 | `/vision` | Create or update vision.md (reads strategy.md) |
 | `/personas` | Create or update user personas (reads strategy.md) |
 | `/constitution` | Define non-negotiable constraints: security, data, error handling |
+| `/infer-migrations` | Discover (brownfield) or define (greenfield) the DB migration strategy → `.specs/migrations.md` |
 | `/design-tokens` | Create or update design tokens (personality-driven) |
 | `/spec-first` | Create or update spec + mockup (reads strategy + constitution) |
 | `/spec-first --full` | Create/update spec AND build without pauses (full Red-Green-Refactor cycle) |
@@ -798,6 +811,7 @@ When working with specs, always tell the user:
 |------|----------|
 | Business strategy | `.specs/strategy.md` |
 | Project constitution | `.specs/constitution.md` |
+| Migration playbook | `.specs/migrations.md` |
 | App vision | `.specs/vision.md` |
 | Build roadmap | `.specs/roadmap.md` |
 | User personas | `.specs/personas/*.md` |

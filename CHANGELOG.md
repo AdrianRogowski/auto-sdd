@@ -2,6 +2,24 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.8.0 — Database Migration Strategy
+
+A migration strategy layered onto SDD across four seams, mirroring how strategy → constitution → spec → tdd already work. Previously the framework only had an *operational* migration step (`MIGRATION_CMD` applies whatever exists, non-blocking); there was no *design* discipline for schema changes and no way to infer a brownfield project's existing migration conventions.
+
+### New
+- **`/infer-migrations` command** — The schema analog of `/spec-init`. On a brownfield project it *infers* the migration conventions already in use (tool, naming, ordering, reversibility, backfill habits, expand-contract patterns) by reading the migrations directory; on a greenfield project it *defines* a strategy from the tech stack and constitution. Writes `.specs/migrations.md` (full playbook) and `.cursor/rules/migrations.mdc` (thin always-applied summary). Detects Prisma, Drizzle, Knex, TypeORM, Alembic, Django, Rails, Flyway, Sqitch, golang-migrate, and raw SQL. Available in both Cursor and Claude Code.
+- **`.specs/migrations.md`** — Migration playbook: tool & layout, going-forward conventions, change classification table (additive / destructive / data transform), the expand-contract rule, and the reversibility checklist used by `/tdd`.
+- **`.cursor/rules/migrations.mdc`** (`alwaysApply: true`) — Guarantees the core migration rules are in every agent's context window (mirrors `design-tokens.mdc`'s relationship to `tokens.md`), pointing to the full playbook for depth.
+- **`## Migration Plan` subsection in specs** — `/spec-first` now emits a Migration Plan inside `## Technical Design` whenever a feature adds, changes, or drops a persisted entity/column/type/index/constraint: change class, forward + rollback, backfill strategy, expand-contract phasing, and apply command. Lives in the spec so it's auto-loaded by `/tdd`.
+- **Migration Verify step in `/tdd`** — New Step 3 (after GREEN): when the schema changed, run the reversibility checklist (up → down → up on a scratch DB, then tests against the migrated schema). Non-blocking and gated on database availability, matching `build-loop-local.sh`. TDD steps renumbered (Drift L1 → 4, Refactor → 5, Drift L1b → 6, Compound → 7, Commit → 8).
+- **"Schema & Migrations" constitution category** — `/constitution` now detects a migrations directory and generates rules (reversible migrations, expand-contract for destructive changes, separate backfills). Enforced via the per-spec Constitutional Compliance table.
+
+### Changed
+- **`/spec-init`** — Brownfield discovery now detects database/migration tooling and runs the `/infer-migrations` flow as a discovery step (new Step 9 in Cursor, Step 7 in Claude Code), writing `.specs/migrations.md` + `.cursor/rules/migrations.mdc` the same way Step 8 handles the design system.
+- **`/spec-first`** — Load Context step reads `.specs/migrations.md`; Technical Design step and the spec template include the Migration Plan subsection.
+- **`/build-next`** — Context loading reads the migration playbook when a feature may touch the schema.
+- **CLAUDE.md, README.md, `.cursor/rules/specs-workflow.mdc`** — Document `/infer-migrations`, the migration playbook, the Migration Plan, and the new `/tdd` verify step.
+
 ## 2.7.0 — Design System: DESIGN.md, Preview, Archetype References
 
 ### New

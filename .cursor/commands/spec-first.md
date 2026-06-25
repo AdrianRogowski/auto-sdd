@@ -28,7 +28,7 @@ Per feature:
                                                                  │ (learnings)  │
                                                                  └──────────────┘
 
-Reads from: .specs/strategy.md, .specs/constitution.md, .specs/personas/, .specs/design-system/, .specs/learnings/index.md
+Reads from: .specs/strategy.md, .specs/constitution.md, .specs/personas/, .specs/design-system/, .specs/migrations.md, .specs/learnings/index.md
 Writes to: .specs/features/, .specs/design-system/components/ (stubs)
 ```
 
@@ -117,6 +117,18 @@ If no constitution exists, note it:
 Run /constitution to define project-wide constraints.
 ```
 
+#### Migrations
+
+Read `.specs/migrations.md` if it exists. It records how this project changes its database schema (tool, naming, reversibility, backfill habits, expand-contract rules). The always-applied `.cursor/rules/migrations.mdc` summary is also in context.
+
+This matters only when the feature changes the Data Model. If it does, the spec will include a **Migration Plan** subsection (see Technical Design) that follows these conventions.
+
+If no migrations playbook exists but the feature touches the schema, note it:
+
+```
+ℹ️ No migrations.md found. Run /infer-migrations to capture (brownfield) or define (greenfield) the migration strategy before changing the schema.
+```
+
 #### Personas (required for good specs)
 
 Read all files in `.specs/personas/`:
@@ -195,8 +207,19 @@ Include only what's relevant to this feature:
 - **API contracts** (if applicable): Endpoints, request/response shapes, error codes. Skip for purely client-side features.
 - **State management**: Where does state live? (URL params, local state, global store, server cache) What are the key state transitions?
 - **Key dependencies**: Which existing modules/services does this feature depend on? What new ones does it introduce?
+- **Migration Plan** (only if the Data Model changes): How the schema change ships safely — see below.
 
 Keep it lightweight — a few bullet points per section, not a full design doc. The goal is to constrain implementation choices enough that two different agents would build roughly the same thing.
+
+**Migration Plan — include ONLY when this feature adds, changes, or drops a persisted entity, column, type, index, or constraint.** Follow the conventions in `.specs/migrations.md` (run `/infer-migrations` first if it doesn't exist). Classify the change and state how it ships:
+
+- **Change class**: additive (safe) / destructive / data transform
+- **Forward + rollback**: what the up migration does, and the down/revert (or why it's irreversible)
+- **Backfill**: needed? online or offline? separate data migration? chunked?
+- **Expand-contract**: required for any change that breaks currently-running code (add new → backfill → switch reads → drop old in a later migration)
+- **Apply command**: matches `MIGRATION_CMD` / the playbook
+
+`/tdd` will verify this plan by running up → down → up on a scratch DB (non-blocking).
 
 ```markdown
 ## Technical Design
@@ -433,6 +456,15 @@ Then [error handling behavior]
 ### Key Dependencies
 - Uses: [existing modules, services, components]
 - Introduces: [new modules this feature creates]
+
+### Migration Plan
+<!-- Include ONLY if the Data Model changes. Follow .specs/migrations.md conventions. -->
+- **Change class**: [additive (safe) | destructive | data transform]
+- **Forward**: [what the up migration does]
+- **Rollback**: [the down/revert — or "irreversible because …"]
+- **Backfill**: [none | separate data migration, online/offline, chunked?]
+- **Expand-contract**: [N/A | phased: add new → backfill → switch reads → drop old]
+- **Apply command**: [matches MIGRATION_CMD]
 
 ## UI Mockup
 

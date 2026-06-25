@@ -6,6 +6,7 @@ A framework for AI-assisted development that combines:
 - **Spec-Driven Development (SDD)** - Define behavior before implementing
 - **Red-Green-Refactor TDD** - Failing tests → implement → clean up (via `/tdd` command)
 - **Constitutional Constraints** - Non-negotiable security/data rules enforced at spec time (via `/constitution`)
+- **Migration Strategy** - Infer (brownfield) or define (greenfield) DB schema-change conventions; specs get a Migration Plan and `/tdd` verifies reversibility (via `/infer-migrations`)
 - **User Personas** - Specs are written in users' language, scoped to their patience
 - **Personality-Driven Design** - Design system derived from vision, not generic templates
 - **Compound Learning** - Agent gets smarter from every session
@@ -347,6 +348,7 @@ Every feature build goes through a multi-stage pipeline. Each agent-based step r
 | `/vision` | Create or update vision.md from description, Jira, or Confluence (reads strategy) |
 | `/personas` | Create user personas (reads strategy + vision for target customer segment) |
 | `/constitution` | Define non-negotiable constraints: security, data handling, error patterns |
+| `/infer-migrations` | Discover (brownfield) or define (greenfield) the DB migration strategy → `.specs/migrations.md` |
 | `/design-tokens` | Create personality-driven design tokens (reads vision + personas) |
 | `/spec-init` | Discover codebase structure, create doc-queue.md (discovery only) |
 
@@ -458,6 +460,7 @@ Archetype references in `references/` teach structure; [getdesign.md](https://ge
 ├── .specs/
 │   ├── strategy.md         # Business strategy (created by /strategy)
 │   ├── constitution.md     # Non-negotiable constraints (created by /constitution)
+│   ├── migrations.md       # Migration playbook (created by /infer-migrations)
 │   ├── vision.md           # App vision (created by /vision or /clone-app)
 │   ├── roadmap.md          # Feature roadmap (single source of truth)
 │   ├── personas/           # User personas (inform every spec)

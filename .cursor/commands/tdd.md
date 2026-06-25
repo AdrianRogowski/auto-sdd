@@ -64,7 +64,21 @@ Run the full TDD cycle from an approved spec. Use this after reviewing a spec cr
 6. Update spec frontmatter: `status: implemented`, add components to `components: []`
 7. Do NOT update the roadmap status — that happens after all verification passes
 
-### 3. Drift Check — Layer 1 (Self-Check)
+### 3. Migration Verify (only if the schema changed)
+
+If this feature changed the Data Model and the spec has a `## Migration Plan`, verify the migration is safe. This is the schema analog of red-green. **Non-blocking and gated on database availability** — if no dev/test DB is reachable, skip with a logged note (mirrors `build-loop-local.sh`, which treats migration failures as non-blocking).
+
+1. Read `.specs/migrations.md` for the apply command and conventions.
+2. Confirm a migration artifact was actually generated (don't rely on auto-sync/push that skips a migration file unless that IS the project's convention).
+3. If a scratch/test DB is available, run the **Reversibility Checklist**:
+   - Apply forward (up) — must succeed
+   - Reverse (down/revert) — must succeed, OR the migration is explicitly marked irreversible in the spec with a reason
+   - Apply forward again (up) — must succeed (idempotency/reversibility)
+   - Run the test suite against the migrated schema
+4. **If it fails** (and a DB was available): fix the migration to match the Migration Plan, or update the plan if reality differs. Treat the failure as a signal for compound.
+5. **If no DB is available**: log `Migration verify skipped — no database reachable` and continue. The build loop's `MIGRATION_CMD` step is the operational backstop.
+
+### 4. Drift Check — Layer 1 (Self-Check)
 
 Re-read your Gherkin scenarios and compare to what you just implemented:
 
@@ -75,7 +89,7 @@ Re-read your Gherkin scenarios and compare to what you just implemented:
 5. **Track drift as a failure signal**: Note what drifted and why — this feeds into compound
 6. Ensure tests still pass after any changes
 
-### 4. REFACTOR — Clean Up
+### 5. REFACTOR — Clean Up
 
 Now that tests pass and spec aligns, improve the code without changing behavior:
 
@@ -85,7 +99,7 @@ Now that tests pass and spec aligns, improve the code without changing behavior:
 4. Run tests after each change — they MUST still pass
 5. If tests fail, fix the refactor (don't change the tests)
 
-### 5. Drift Check — Layer 1b (Post-Refactor)
+### 6. Drift Check — Layer 1b (Post-Refactor)
 
 Re-verify spec↔code alignment after refactoring:
 
@@ -94,7 +108,7 @@ Re-verify spec↔code alignment after refactoring:
 3. Check that refactoring didn't subtly change behavior (e.g., error handling, validation)
 4. **If drift found**: fix it, ensure tests pass
 
-### 6. Compound — Extract Learnings (Automatic)
+### 7. Compound — Extract Learnings (Automatic)
 
 **Always run** — this is not optional. Extract learnings including failure signals:
 
@@ -107,7 +121,7 @@ Re-verify spec↔code alignment after refactoring:
    - Build/lint failures encountered
 4. Update `.specs/learnings/index.md`
 
-### 7. Commit
+### 8. Commit
 
 1. Regenerate mapping: `./scripts/generate-mapping.sh`
 2. Stage all changes

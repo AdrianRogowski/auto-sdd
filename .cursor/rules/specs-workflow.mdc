@@ -8,6 +8,7 @@ alwaysApply: true
 This project uses a specs-driven workflow. The `.specs/` directory contains:
 - `strategy.md` - Business strategy: target customer, buying motion, value prop
 - `constitution.md` - Non-negotiable constraints: security, data handling, errors
+- `migrations.md` - Database migration playbook: tool, conventions, reversibility (created by /infer-migrations)
 - `features/` - Gherkin feature specifications with ASCII mockups
 - `personas/` - User personas that inform every spec
 - `test-suites/` - Documentation of what each test file covers
@@ -106,6 +107,17 @@ When the user says any of these, **invoke `/constitution`**:
 | "non-negotiables" | Run `/constitution` |
 | "audit specs" | Run `/constitution --audit` |
 
+When the user says any of these, **invoke `/infer-migrations`**:
+
+| User says | Action |
+|-----|-----|
+| "infer migrations" | Run `/infer-migrations` |
+| "migration strategy" | Run `/infer-migrations` |
+| "migration playbook" | Run `/infer-migrations` |
+| "how do we do migrations" | Run `/infer-migrations` |
+| "document our migrations" | Run `/infer-migrations` |
+| "schema change strategy" | Run `/infer-migrations` |
+
 **Create vs Update**: `/spec-first` auto-detects whether to create or update: searches `.specs/features/` for a matching spec (by path or frontmatter `feature:`). Match found → update existing spec. No match → create new spec. With `--full`, both paths continue through the full Red-Green-Refactor TDD cycle.
 
 ### Full Mode Triggers
@@ -120,6 +132,7 @@ If user includes "full", "auto", "no stops", or "don't pause":
 .specs/
 ├── strategy.md            # Business strategy (created by /strategy)
 ├── constitution.md        # Non-negotiable constraints (created by /constitution)
+├── migrations.md          # Migration playbook (created by /infer-migrations)
 ├── personas/              # User personas (inform every spec)
 │   ├── primary.md         # Main user persona
 │   ├── secondary.md       # Second user type (if needed)
@@ -416,6 +429,7 @@ Then [expected result]
 | `/vision` | Create or update vision.md (reads strategy) | Setting app direction |
 | `/personas` | Create or update user personas (reads strategy) | Before first feature (or anytime) |
 | `/constitution` | Define non-negotiable project constraints | Before first feature (or anytime) |
+| `/infer-migrations` | Discover/define DB migration strategy → `.specs/migrations.md` | Before changing the schema (or anytime) |
 | `/design-tokens` | Create or update design tokens | Before first feature (or anytime) |
 
 ### GTM Commands (Go-to-Market)
@@ -527,6 +541,7 @@ New components/modules should get a 2-3 letter prefix.
 |------|----------|
 | Business strategy | `.specs/strategy.md` |
 | Project constitution | `.specs/constitution.md` |
+| Migration playbook | `.specs/migrations.md` |
 | User personas | `.specs/personas/*.md` |
 | GTM playbook | `.specs/gtm.md` |
 | Prospect list | `.specs/gtm/prospects.md` |
