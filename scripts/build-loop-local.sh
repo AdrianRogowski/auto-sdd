@@ -32,6 +32,23 @@
 #               running drift check + compound post-merge per feature.
 #               PARALLEL_FEATURES: max concurrent agents (default: 3)
 #
+#               Merge conflict handling (in order):
+#               1. Deterministic rules for known shared files:
+#                  mapping.md/roadmap.md keep the integration branch's copy,
+#                  learnings files get a line-level union merge, package.json
+#                  gets a three-way JSON union (deps/scripts from both sides),
+#                  lockfiles are regenerated after package.json resolution.
+#               2. Source-file conflicts go to a MERGE RESOLUTION agent that
+#                  edits the conflicted files in place (MERGE_MODEL).
+#               3. If resolution fails (or the merged result breaks build/tests/
+#                  drift), the feature is REBUILT sequentially in a fresh
+#                  worktree forked from the integrated code, then merged again
+#                  (REBUILD_ON_CONFLICT=true, default). Only after the rebuild
+#                  also fails is the feature marked ⏸️ blocked.
+#               The ready-feature list is re-parsed before every batch, so
+#               features whose dependencies completed in an earlier batch are
+#               picked up within the same run.
+#
 # BUILD_CHECK_CMD: command to verify the build after each feature.
 #   Defaults to auto-detection (TypeScript → tsc, Python → pytest, etc.)
 #   Set to "skip" to disable build checking.
@@ -134,6 +151,7 @@
 #   DRIFT_MODEL       - Model for catch-drift agent
 #   COMPOUND_MODEL    - Model for compound/learnings agent
 #   REVIEW_MODEL      - Model for code-review agent
+#   MERGE_MODEL       - Model for the merge-resolution agent (parallel mode)
 #
 #   Examples:
 #     SPEC_MODEL="opus-4.6-thinking"              # Opus for spec (strong at planning)
@@ -187,6 +205,7 @@ MAX_FEATURES="${MAX_FEATURES:-50}"
 MAX_RETRIES="${MAX_RETRIES:-3}"
 BRANCH_STRATEGY="${BRANCH_STRATEGY:-chained}"
 PARALLEL_FEATURES="${PARALLEL_FEATURES:-3}"
+REBUILD_ON_CONFLICT="${REBUILD_ON_CONFLICT:-true}"
 DRIFT_CHECK="${DRIFT_CHECK:-true}"
 MAX_DRIFT_RETRIES="${MAX_DRIFT_RETRIES:-2}"
 POST_BUILD_STEPS="${POST_BUILD_STEPS:-test}"
@@ -203,6 +222,7 @@ RETRY_MODEL="${RETRY_MODEL:-}"
 DRIFT_MODEL="${DRIFT_MODEL:-}"
 COMPOUND_MODEL="${COMPOUND_MODEL:-}"
 REVIEW_MODEL="${REVIEW_MODEL:-}"
+MERGE_MODEL="${MERGE_MODEL:-}"
 
 # Rate limit handling
 RATE_LIMIT_BACKOFF="${RATE_LIMIT_BACKOFF:-60}"
@@ -948,10 +968,26 @@ The SPEC_FILE line is REQUIRED when FEATURE_SPEC_READY is reported.
 '
 
 # Phase 2: Implement from spec. Uses BUILD_MODEL.
-# Called with: implement_prompt "$feature_name" "$spec_file"
+# Called with: implement_prompt "$feature_name" "$spec_file" [mode]
+# mode="parallel" → worker must not touch merge-phase-owned shared files
 implement_prompt() {
     local feature_name="$1"
     local spec_file="$2"
+    local mode="${3:-}"
+
+    local mapping_step="5. Regenerate mapping: run ./scripts/generate-mapping.sh"
+    local shared_files_rule=""
+    if [ "$mode" = "parallel" ]; then
+        mapping_step="5. Do NOT run generate-mapping.sh (mapping is regenerated after merge)"
+        shared_files_rule="
+PARALLEL BUILD RULE: You are one of several agents building features concurrently.
+Do NOT modify these shared files (the merge phase owns them):
+- .specs/mapping.md (regenerated after merge)
+- .specs/roadmap.md (status is updated by the orchestrator)
+- .specs/learnings/* (compound runs post-merge)
+Only touch your own feature's spec, source files, and tests.
+"
+    fi
 
     # For early features (infrastructure), remind the agent to configure build tooling
     local infra_hint=""
@@ -976,10 +1012,11 @@ The spec for \"$feature_name\" exists at $spec_file. Implement it through RED �
 2. Write failing tests covering ALL scenarios (RED)
 3. Implement until all tests pass (GREEN)
 4. Self-check drift: re-read spec, compare to code, fix obvious mismatches (Layer 1)
-5. Regenerate mapping: run ./scripts/generate-mapping.sh
+$mapping_step
 6. Commit all changes with message: feat: $feature_name
 
 IMPORTANT: Do NOT update the roadmap status. Do NOT run /compound. Those happen in later phases after verification.
+$shared_files_rule
 
 CRITICAL IMPLEMENTATION RULES (from roadmap):
 - NO mock data, fake JSON, or placeholder content. All features use real DB queries and real API calls.
@@ -1565,7 +1602,8 @@ Build the spec only for feature: $feature_name
 This is a parallel build from $MAIN_BRANCH — do not assume other features exist.
 
 1. Run /spec-first $feature_name (WITHOUT --full) — create or update the spec only
-2. Do NOT implement yet. Regenerate mapping: run ./scripts/generate-mapping.sh
+2. Do NOT implement yet. Do NOT run generate-mapping.sh (mapping is regenerated after merge).
+3. Do NOT modify .specs/mapping.md, .specs/roadmap.md, or .specs/learnings/* — the merge phase owns those shared files. Only create/update your own feature's spec.
 
 Output exactly one of:
 FEATURE_SPEC_READY: $feature_name
@@ -1599,7 +1637,7 @@ SPEC_FAILED: {reason}
 
         # Phase 2: Implement (RED -> GREEN)
         log "[parallel:$feature_name] Phase 2: Implement"
-        run_agent "$BUILD_MODEL" "$(implement_prompt "$feature_name" "${spec_file:-.specs/features/unknown.feature.md}")" 2>&1 | tee "$build_output" || true
+        run_agent "$BUILD_MODEL" "$(implement_prompt "$feature_name" "${spec_file:-.specs/features/unknown.feature.md}" "parallel")" 2>&1 | tee "$build_output" || true
         local build_result
         build_result=$(cat "$build_output")
         rm -f "$build_output"
@@ -1652,69 +1690,452 @@ SPEC_FAILED: {reason}
     return 1
 }
 
+# Line-level union merge of a conflicted file (keeps both sides' additions).
+# Used for append-only files like learnings.
+merge_union_file() {
+    local file="$1"
+    local base_f ours_f theirs_f
+    base_f=$(mktemp); ours_f=$(mktemp); theirs_f=$(mktemp)
+    git show ":1:$file" > "$base_f" 2>/dev/null || : > "$base_f"
+    git show ":2:$file" > "$ours_f" 2>/dev/null || : > "$ours_f"
+    git show ":3:$file" > "$theirs_f" 2>/dev/null || : > "$theirs_f"
+    git merge-file --union -p "$ours_f" "$base_f" "$theirs_f" > "$file" 2>/dev/null
+    rm -f "$base_f" "$ours_f" "$theirs_f"
+    git add "$file" 2>/dev/null
+}
+
+# Three-way JSON union merge for package.json: keeps dependencies/scripts added
+# by BOTH sides instead of dropping one side wholesale. On unmergeable value
+# conflicts the incoming (theirs) side wins — the post-merge build/test gate
+# validates the result either way.
+merge_package_json() {
+    local file="$1"
+    if ! command -v node &>/dev/null; then
+        warn "node not found — falling back to --theirs for $file"
+        git checkout --theirs "$file" 2>/dev/null
+        git add "$file" 2>/dev/null
+        return
+    fi
+    local base_f ours_f theirs_f
+    base_f=$(mktemp); ours_f=$(mktemp); theirs_f=$(mktemp)
+    git show ":1:$file" > "$base_f" 2>/dev/null || echo '{}' > "$base_f"
+    git show ":2:$file" > "$ours_f" 2>/dev/null || echo '{}' > "$ours_f"
+    git show ":3:$file" > "$theirs_f" 2>/dev/null || echo '{}' > "$theirs_f"
+
+    if node -e '
+const fs = require("fs");
+const [baseF, oursF, theirsF, outF] = process.argv.slice(1);
+const read = (f) => { try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return {}; } };
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+function merge3(b, o, t) {
+  b = b || {};
+  const out = {};
+  for (const k of new Set([...Object.keys(o), ...Object.keys(t)])) {
+    const bv = b[k], ov = o[k], tv = t[k];
+    if (ov === undefined) {
+      // only theirs has it (added by theirs, or deleted by ours)
+      if (!eq(tv, bv)) out[k] = tv;
+    } else if (tv === undefined) {
+      if (!eq(ov, bv)) out[k] = ov;
+    } else if (eq(ov, tv)) {
+      out[k] = ov;
+    } else if (isObj(ov) && isObj(tv)) {
+      out[k] = merge3(isObj(bv) ? bv : {}, ov, tv);
+    } else if (eq(ov, bv)) {
+      out[k] = tv; // ours unchanged, theirs changed → take theirs
+    } else if (eq(tv, bv)) {
+      out[k] = ov; // theirs unchanged, ours changed → take ours
+    } else {
+      out[k] = tv; // both changed differently → incoming feature wins
+    }
+  }
+  return out;
+}
+const merged = merge3(read(baseF), read(oursF), read(theirsF));
+fs.writeFileSync(outF, JSON.stringify(merged, null, 2) + "\n");
+' "$base_f" "$ours_f" "$theirs_f" "$file" 2>/dev/null; then
+        log "Union-merged: $file"
+    else
+        warn "JSON merge failed for $file — falling back to --theirs"
+        git checkout --theirs "$file" 2>/dev/null
+    fi
+    rm -f "$base_f" "$ours_f" "$theirs_f"
+    git add "$file" 2>/dev/null
+}
+
+# Regenerate the lockfile after a package.json union merge (lockfile-only, fast).
+# Non-blocking: a stale lockfile is caught by the post-merge build/test gate.
+regenerate_lockfile() {
+    if [ -f "pnpm-lock.yaml" ] && command -v pnpm &>/dev/null; then
+        log "Regenerating pnpm-lock.yaml after package.json merge..."
+        pnpm install --lockfile-only >/dev/null 2>&1 && git add pnpm-lock.yaml 2>/dev/null || warn "pnpm lockfile regeneration failed (non-blocking)"
+    elif [ -f "package-lock.json" ] && command -v npm &>/dev/null; then
+        log "Regenerating package-lock.json after package.json merge..."
+        npm install --package-lock-only >/dev/null 2>&1 && git add package-lock.json 2>/dev/null || warn "npm lockfile regeneration failed (non-blocking)"
+    elif [ -f "yarn.lock" ] || [ -f "bun.lockb" ]; then
+        warn "Cannot auto-regenerate yarn/bun lockfile — kept integration branch's copy"
+    fi
+}
+
+# Deterministic resolution for known shared files. Unknown conflicts are LEFT
+# IN PLACE for the merge-resolution agent. Returns 0 only if every conflict
+# was resolved here.
 try_auto_resolve() {
     local conflicted_files
     conflicted_files=$(git diff --name-only --diff-filter=U 2>/dev/null)
 
     [ -z "$conflicted_files" ] && return 0
 
+    local unresolved=0
+    local pkg_json_merged=false
+
     while IFS= read -r file; do
         [ -z "$file" ] && continue
         case "$file" in
             .specs/mapping.md)
+                # Auto-generated — keep ours, regenerated after all merges
                 git checkout --ours "$file" 2>/dev/null
+                git add "$file" 2>/dev/null
                 ;;
             .specs/roadmap.md)
-                git checkout --theirs "$file" 2>/dev/null
+                # Integration branch owns roadmap status — keep ours
+                git checkout --ours "$file" 2>/dev/null
+                git add "$file" 2>/dev/null
                 ;;
             .specs/learnings/*)
-                git checkout --theirs "$file" 2>/dev/null
+                merge_union_file "$file"
                 ;;
             package.json|*/package.json)
-                git checkout --theirs "$file" 2>/dev/null
+                merge_package_json "$file"
+                pkg_json_merged=true
                 ;;
-            package-lock.json|*/package-lock.json|pnpm-lock.yaml|*/pnpm-lock.yaml)
-                git checkout --theirs "$file" 2>/dev/null
+            package-lock.json|*/package-lock.json|pnpm-lock.yaml|*/pnpm-lock.yaml|yarn.lock|*/yarn.lock|bun.lockb|*/bun.lockb)
+                # Keep ours for now — regenerated below if package.json was merged
+                git checkout --ours "$file" 2>/dev/null
+                git add "$file" 2>/dev/null
                 ;;
             *)
-                warn "Cannot auto-resolve conflict in: $file"
-                return 1
+                # Not a known shared file — leave for the merge-resolution agent
+                unresolved=$((unresolved + 1))
                 ;;
         esac
-        git add "$file" 2>/dev/null || return 1
     done <<< "$conflicted_files"
+
+    if [ "$pkg_json_merged" = true ]; then
+        regenerate_lockfile
+    fi
+
+    [ "$unresolved" -eq 0 ]
+}
+
+# Agent-based resolution for source-file conflicts. Runs mid-merge: the
+# conflicted index is left in place and a fresh agent edits + stages the files.
+# The orchestrator commits afterward; the post-merge build/test/drift gates
+# validate the result and revert if the resolution is wrong.
+# Args: $1 = feature name, $2 = spec file path
+resolve_merge_with_agent() {
+    local feature="$1"
+    local spec_file="$2"
+
+    local conflicted
+    conflicted=$(git diff --name-only --diff-filter=U 2>/dev/null)
+    [ -z "$conflicted" ] && return 0
+
+    local conflict_count
+    conflict_count=$(echo "$conflicted" | grep -c . | trim)
+    log "Merge-resolution agent (model: ${MERGE_MODEL:-${AGENT_MODEL:-default}}) — $conflict_count conflicted file(s)"
+
+    local conflict_list
+    conflict_list=$(echo "$conflicted" | sed 's/^/  - /')
+
+    local merge_prompt="
+You are the MERGE RESOLUTION agent. A git merge is currently IN PROGRESS (do not abort it).
+The feature \"$feature\" (spec: $spec_file) is being merged onto an integration branch that already contains other features built in parallel.
+
+These files have unresolved conflict markers:
+$conflict_list
+
+Your job: resolve every conflict SEMANTICALLY so that BOTH the already-integrated features' behavior AND the incoming feature \"$feature\"'s behavior are preserved.
+
+Rules:
+1. Read each conflicted file and understand what each side is doing. Read $spec_file (and related specs in .specs/features/) if you need context on intent.
+2. Produce a correct union of both sides. Do NOT simply pick one side unless the two changes are truly identical in intent.
+3. Remove ALL conflict markers (<<<<<<<, =======, >>>>>>>).
+4. If the union requires a small follow-up edit (e.g. both sides added an import or a route registration), make it.
+5. After resolving each file, stage it: git add <file>
+6. Do NOT run: git commit, git merge --abort, git reset, git checkout, git stash. The orchestrator commits after you finish.
+7. Do NOT modify the roadmap or mapping files.
+
+After all files are resolved and staged, output EXACTLY ONE of:
+MERGE_RESOLVED: {one-line summary of how the conflicts were reconciled}
+MERGE_UNRESOLVABLE: {which file and why a correct union is impossible}
+"
+
+    local merge_output
+    merge_output=$(mktemp)
+    run_agent "$MERGE_MODEL" "$merge_prompt" 2>&1 | tee "$merge_output" || true
+    local merge_result
+    merge_result=$(cat "$merge_output")
+    rm -f "$merge_output"
+
+    if echo "$merge_result" | grep -q "MERGE_UNRESOLVABLE"; then
+        local reason
+        reason=$(echo "$merge_result" | grep "MERGE_UNRESOLVABLE" | tail -1 | cut -d: -f2- | trim)
+        warn "Merge agent gave up: $reason"
+        return 1
+    fi
+
+    # Verify: no unmerged paths remain
+    if [ -n "$(git diff --name-only --diff-filter=U 2>/dev/null)" ]; then
+        warn "Merge agent left unresolved conflicts"
+        return 1
+    fi
+
+    # Verify: no conflict markers left in the previously conflicted files
+    local marker_files=""
+    while IFS= read -r f; do
+        [ -z "$f" ] || [ ! -f "$f" ] && continue
+        if grep -q '^<<<<<<<\|^>>>>>>>' "$f" 2>/dev/null; then
+            marker_files="$marker_files $f"
+        fi
+    done <<< "$conflicted"
+    if [ -n "$marker_files" ]; then
+        warn "Conflict markers still present in:$marker_files"
+        return 1
+    fi
+
+    # Stage any follow-up edits the agent made but forgot to add
+    git add -A 2>/dev/null || true
+    return 0
+}
+
+# Roadmap status update + immediate commit. In parallel mode the integration
+# branch working tree MUST stay clean between merges — an uncommitted
+# roadmap.md makes the next merge refuse to start.
+mark_roadmap_status_committed() {
+    local feature_name="$1"
+    local status_emoji="$2"
+    mark_roadmap_status "$feature_name" "$status_emoji"
+    if ! git diff --quiet -- .specs/roadmap.md 2>/dev/null; then
+        git add .specs/roadmap.md 2>/dev/null || true
+        git commit -m "chore: roadmap status update ($status_emoji $feature_name)" >/dev/null 2>&1 || true
+    fi
+}
+
+# Handle a feature whose merge (or post-merge verification) failed.
+# on_fail="rebuild" → queue for the rebuild pass (fresh build on integrated code)
+# on_fail="block"   → mark ⏸️ and count as failed (terminal)
+handle_merge_failure() {
+    local feature="$1"
+    local branch="$2"
+    local on_fail="$3"
+    local reason="$4"
+
+    if [ "$on_fail" = "rebuild" ] && [ "$REBUILD_ON_CONFLICT" = "true" ]; then
+        log "Queueing rebuild on integrated code: $feature ($reason)"
+        REBUILD_QUEUE+=("$feature")
+        LOOP_TIMINGS+=("↻ $feature: $reason — queued for rebuild")
+    else
+        warn "Blocking: $feature ($reason; branch preserved: $branch)"
+        LOOP_FAILED=$((LOOP_FAILED + 1))
+        mark_roadmap_status_committed "$feature" "⏸️"
+        LOOP_TIMINGS+=("✗ $feature: $reason")
+    fi
+}
+
+# Merge one feature branch onto the current (integration) branch, then verify:
+# build + tests, drift check, compound. Reverts to the pre-merge commit on any
+# failure. Marks the roadmap ✅ (committed) on success.
+# Args: $1=feature, $2=branch, $3=spec, $4=sources, $5=on_fail (rebuild|block)
+# Returns 0 if merged + verified.
+merge_and_verify_feature() {
+    local feature="$1"
+    local branch="$2"
+    local spec="$3"
+    local sources="$4"
+    local on_fail="${5:-block}"
+
+    log "Merging: $feature ($branch)"
+
+    # The integration tree must be clean or the merge refuses to start.
+    # Roadmap/mapping updates are committed as they happen, but guard anyway.
+    if ! check_working_tree_clean; then
+        warn "Integration tree dirty before merging $feature — committing housekeeping"
+        git add -A 2>/dev/null || true
+        git commit -m "chore: integration housekeeping" >/dev/null 2>&1 || true
+    fi
+
+    local pre_merge_commit
+    pre_merge_commit=$(git rev-parse HEAD)
+
+    local merged=false
+    if git merge "$branch" --no-edit 2>/dev/null; then
+        success "Clean merge: $feature"
+        merged=true
+    elif git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+        log "Conflict merging $feature — deterministic auto-resolve..."
+        local resolved=true
+        if ! try_auto_resolve; then
+            log "Source-file conflicts remain — invoking merge-resolution agent"
+            resolve_merge_with_agent "$feature" "$spec" || resolved=false
+        fi
+        if [ "$resolved" = true ] && git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+            git commit --no-edit >/dev/null 2>&1 || resolved=false
+        fi
+        if [ "$resolved" = true ]; then
+            success "Resolved merge: $feature"
+            merged=true
+        else
+            git merge --abort 2>/dev/null || git reset --hard "$pre_merge_commit" 2>/dev/null || true
+        fi
+    else
+        # Merge never started (e.g. untracked/dirty file would be overwritten)
+        warn "Merge could not start for $feature — resetting integration tree"
+        git reset --hard "$pre_merge_commit" 2>/dev/null || true
+    fi
+
+    if [ "$merged" != true ]; then
+        handle_merge_failure "$feature" "$branch" "$on_fail" "merge conflicts unresolvable"
+        return 1
+    fi
+
+    # Post-merge verification: build + tests on integrated code
+    local merge_ok=true
+    if [ -n "$BUILD_CMD" ] && ! check_build; then
+        warn "Build failed after merging $feature"
+        merge_ok=false
+    fi
+    if [ "$merge_ok" = true ] && [ -n "$TEST_CMD" ] && ! check_tests; then
+        warn "Tests failed after merging $feature"
+        merge_ok=false
+    fi
+
+    if [ "$merge_ok" != true ]; then
+        warn "Reverting merge of $feature (broke build/tests)"
+        git reset --hard "$pre_merge_commit" 2>/dev/null || true
+        handle_merge_failure "$feature" "$branch" "$on_fail" "merged but broke build/tests"
+        return 1
+    fi
+
+    # Post-merge Phase 4: Drift check (Layer 2 — fresh agent on integrated code)
+    local drift_ok=true
+    if [ "$DRIFT_CHECK" = "true" ] && [ -n "$spec" ]; then
+        log "Post-merge drift check: $feature"
+        if ! check_drift "$spec" "$sources"; then
+            warn "Drift check failed after merge for $feature"
+            drift_ok=false
+        fi
+    fi
+
+    if [ "$drift_ok" != true ]; then
+        warn "Reverting merge of $feature (unresolvable drift)"
+        git reset --hard "$pre_merge_commit" 2>/dev/null || true
+        handle_merge_failure "$feature" "$branch" "$on_fail" "merged but drift unresolvable"
+        return 1
+    fi
+
+    # Post-merge Phase 5: Compound (extract learnings)
+    if [ "$COMPOUND" = "true" ]; then
+        log "Post-merge compound: $feature"
+        run_agent "$COMPOUND_MODEL" "$(compound_prompt "$feature" "$spec" "$sources")" 2>/dev/null || true
+    fi
+
+    # All phases passed — feature is complete
+    LOOP_BUILT=$((LOOP_BUILT + 1))
+    BUILT_FEATURE_NAMES+=("$feature")
+    mark_roadmap_status_committed "$feature" "✅"
+    success "Merged and verified: $feature"
+    return 0
+}
+
+# Rebuild a conflicted feature in a fresh worktree forked from the CURRENT
+# integration branch, so the agent implements it against the already-integrated
+# code instead of the stale batch base. Sets REBUILT_BRANCH/SPEC/SOURCES.
+rebuild_feature_on_integration() {
+    local feature="$1"
+    local safe_name
+    safe_name=$(echo "$feature" | tr ' :/' '-' | tr '[:upper:]' '[:lower:]')
+    local worktree_name="rebuild-${safe_name}-$(date +%H%M%S)-$$"
+    local worktree_path="$PROJECT_DIR/.build-worktrees/$worktree_name"
+    local branch_name="auto/rebuild-${safe_name}"
+    local result_file
+    result_file=$(mktemp)
+
+    local rebuild_base
+    rebuild_base=$(git branch --show-current)
+
+    mkdir -p "$(dirname "$worktree_path")"
+    git branch -D "$branch_name" 2>/dev/null || true
+
+    if ! git worktree add -b "$branch_name" "$worktree_path" "$rebuild_base" 2>/dev/null; then
+        fail "Failed to create rebuild worktree for: $feature"
+        rm -f "$result_file"
+        return 1
+    fi
+
+    log "[rebuild:$feature] Rebuilding sequentially on integrated code ($rebuild_base)"
+    build_feature_in_worktree "$feature" "$worktree_path" "$branch_name" "$result_file" || true
+
+    cd "$PROJECT_DIR"
+    git worktree remove "$worktree_path" 2>/dev/null || git worktree remove --force "$worktree_path" 2>/dev/null || true
+
+    local result_line=""
+    [ -f "$result_file" ] && result_line=$(cat "$result_file")
+    rm -f "$result_file"
+
+    if [ "$(echo "$result_line" | cut -d'|' -f1)" != "SUCCESS" ]; then
+        return 1
+    fi
+
+    REBUILT_BRANCH="$branch_name"
+    REBUILT_SPEC=$(echo "$result_line" | cut -d'|' -f4)
+    REBUILT_SOURCES=$(echo "$result_line" | cut -d'|' -f5)
     return 0
 }
 
 run_parallel_loop() {
-    local ready_features_str
-    ready_features_str=$(parse_ready_features)
-
-    if [ -z "$ready_features_str" ]; then
-        log "No features ready to build"
-        LOOP_BUILT=0
-        LOOP_FAILED=0
-        return
-    fi
-
-    IFS='|' read -ra ALL_READY <<< "$ready_features_str"
-    local total_ready=${#ALL_READY[@]}
-    log "Found $total_ready features ready to build (parallelism: $PARALLEL_FEATURES)"
-
     LOOP_BUILT=0
     LOOP_FAILED=0
     LOOP_TIMINGS=()
 
-    local features_started=0
+    local features_attempted=0
     local batch_num=0
+    local attempted_marker="|"
 
-    while [ "$features_started" -lt "$total_ready" ] && [ "$features_started" -lt "$MAX_FEATURES" ]; do
+    while [ "$features_attempted" -lt "$MAX_FEATURES" ]; do
+        # Re-parse the roadmap before every batch: features whose dependencies
+        # completed in an earlier batch of this run become ready here.
+        local ready_features_str
+        ready_features_str=$(parse_ready_features)
+
+        local BATCH_FEATURES=()
+        local CANDIDATES=()
+        IFS='|' read -ra CANDIDATES <<< "$ready_features_str"
+        local f
+        for f in "${CANDIDATES[@]}"; do
+            [ -z "$f" ] && continue
+            case "$attempted_marker" in *"|$f|"*) continue ;; esac
+            BATCH_FEATURES+=("$f")
+            [ $((features_attempted + ${#BATCH_FEATURES[@]})) -ge "$MAX_FEATURES" ] && break
+            [ ${#BATCH_FEATURES[@]} -ge "$PARALLEL_FEATURES" ] && break
+        done
+
+        if [ ${#BATCH_FEATURES[@]} -eq 0 ]; then
+            if [ "$batch_num" -eq 0 ]; then
+                log "No features ready to build"
+            else
+                log "No more features ready to build"
+            fi
+            break
+        fi
+
         batch_num=$((batch_num + 1))
-        local batch_size=$PARALLEL_FEATURES
-        local remaining=$((total_ready - features_started))
-        [ "$remaining" -lt "$batch_size" ] && batch_size=$remaining
-        local max_remaining=$((MAX_FEATURES - features_started))
-        [ "$max_remaining" -lt "$batch_size" ] && batch_size=$max_remaining
+        local batch_size=${#BATCH_FEATURES[@]}
+        for f in "${BATCH_FEATURES[@]}"; do
+            attempted_marker="${attempted_marker}${f}|"
+        done
+        features_attempted=$((features_attempted + batch_size))
 
         echo ""
         echo "╔═══════════════════════════════════════════════════════════╗"
@@ -1731,8 +2152,7 @@ run_parallel_loop() {
         local WORKTREE_PATHS=()
 
         for i in $(seq 0 $((batch_size - 1))); do
-            local idx=$((features_started + i))
-            local feature="${ALL_READY[$idx]}"
+            local feature="${BATCH_FEATURES[$i]}"
             local safe_name
             safe_name=$(echo "$feature" | tr ' :/' '-' | tr '[:upper:]' '[:lower:]')
             local worktree_name="parallel-${safe_name}-$(date +%H%M%S)-$$-$i"
@@ -1764,7 +2184,6 @@ run_parallel_loop() {
         done
 
         if [ ${#PIDS[@]} -eq 0 ]; then
-            features_started=$((features_started + batch_size))
             continue
         fi
 
@@ -1822,120 +2241,71 @@ run_parallel_loop() {
         if [ ${#SUCCEEDED_BRANCHES[@]} -gt 0 ]; then
             cd "$PROJECT_DIR"
 
+            local loop_built_before=$LOOP_BUILT
             local integration_branch="auto/integration-$(date +%Y%m%d-%H%M%S)"
             git checkout -b "$integration_branch" "$MAIN_BRANCH" 2>/dev/null || {
                 fail "Failed to create integration branch"
-                features_started=$((features_started + batch_size))
                 continue
             }
 
             log "Merging ${#SUCCEEDED_BRANCHES[@]} features onto $integration_branch..."
 
+            REBUILD_QUEUE=()
+
             # Merge in roadmap order (= array order, which follows parse_ready_features)
             for idx in $(seq 0 $((${#SUCCEEDED_BRANCHES[@]} - 1))); do
-                local branch="${SUCCEEDED_BRANCHES[$idx]}"
-                local feature="${SUCCEEDED_FEATURES[$idx]}"
-                local spec="${SUCCEEDED_SPECS[$idx]}"
-                local sources="${SUCCEEDED_SOURCES[$idx]}"
-
-                log "Merging: $feature ($branch)"
-
-                local merged=false
-                if git merge "$branch" --no-edit 2>/dev/null; then
-                    success "Clean merge: $feature"
-                    merged=true
-                else
-                    log "Conflict merging $feature — attempting auto-resolve..."
-                    if try_auto_resolve; then
-                        git commit --no-edit 2>/dev/null || {
-                            warn "Failed to commit auto-resolved merge for $feature"
-                            git merge --abort 2>/dev/null || git reset --hard HEAD 2>/dev/null || true
-                            LOOP_FAILED=$((LOOP_FAILED + 1))
-                            mark_roadmap_status "$feature" "⏸️"
-                            continue
-                        }
-                        success "Auto-resolved merge: $feature"
-                        merged=true
-                    else
-                        git merge --abort 2>/dev/null || true
-                        warn "Cannot auto-resolve conflicts for $feature — skipping (branch preserved: $branch)"
-                        LOOP_FAILED=$((LOOP_FAILED + 1))
-                        mark_roadmap_status "$feature" "⏸️"
-                        continue
-                    fi
-                fi
-
-                if [ "$merged" != true ]; then
-                    continue
-                fi
-
-                # Post-merge verification: build + tests on integrated code
-                local merge_ok=true
-                if [ -n "$BUILD_CMD" ] && ! check_build; then
-                    warn "Build failed after merging $feature"
-                    merge_ok=false
-                fi
-                if [ "$merge_ok" = true ] && [ -n "$TEST_CMD" ] && ! check_tests; then
-                    warn "Tests failed after merging $feature"
-                    merge_ok=false
-                fi
-
-                if [ "$merge_ok" != true ]; then
-                    warn "Reverting merge of $feature (broke build/tests)"
-                    git reset --hard HEAD~1 2>/dev/null || true
-                    LOOP_FAILED=$((LOOP_FAILED + 1))
-                    mark_roadmap_status "$feature" "⏸️"
-                    LOOP_TIMINGS+=("⚠ $feature: merged but broke build/tests")
-                    continue
-                fi
-
-                # Post-merge Phase 4: Drift check (Layer 2 — fresh agent on integrated code)
-                local drift_ok=true
-                if [ "$DRIFT_CHECK" = "true" ] && [ -n "$spec" ]; then
-                    log "Post-merge drift check: $feature"
-                    if ! check_drift "$spec" "$sources"; then
-                        warn "Drift check failed after merge for $feature"
-                        drift_ok=false
-                    fi
-                fi
-
-                if [ "$drift_ok" != true ]; then
-                    warn "Reverting merge of $feature (unresolvable drift)"
-                    git reset --hard HEAD~1 2>/dev/null || true
-                    LOOP_FAILED=$((LOOP_FAILED + 1))
-                    mark_roadmap_status "$feature" "⏸️"
-                    LOOP_TIMINGS+=("⚠ $feature: merged but drift unresolvable")
-                    continue
-                fi
-
-                # Post-merge Phase 5: Compound (extract learnings)
-                if [ "$COMPOUND" = "true" ]; then
-                    log "Post-merge compound: $feature"
-                    run_agent "$COMPOUND_MODEL" "$(compound_prompt "$feature" "$spec" "$sources")" 2>/dev/null || true
-                fi
-
-                # All phases passed — feature is complete
-                LOOP_BUILT=$((LOOP_BUILT + 1))
-                BUILT_FEATURE_NAMES+=("$feature")
-                mark_roadmap_status "$feature" "✅"
-                success "Merged and verified: $feature"
+                merge_and_verify_feature \
+                    "${SUCCEEDED_FEATURES[$idx]}" \
+                    "${SUCCEEDED_BRANCHES[$idx]}" \
+                    "${SUCCEEDED_SPECS[$idx]}" \
+                    "${SUCCEEDED_SOURCES[$idx]}" \
+                    "rebuild" || true
             done
+
+            # ── Rebuild pass: conflicted features get a fresh sequential build
+            #    on top of the integrated code, then merge again (should be
+            #    clean since they fork from the current HEAD) ──
+            if [ ${#REBUILD_QUEUE[@]} -gt 0 ]; then
+                echo ""
+                log "Rebuild pass: ${#REBUILD_QUEUE[@]} feature(s) rebuilding on integrated code"
+                local rb_feature
+                for rb_feature in "${REBUILD_QUEUE[@]}"; do
+                    local rb_start
+                    rb_start=$(date +%s)
+                    REBUILT_BRANCH=""
+                    REBUILT_SPEC=""
+                    REBUILT_SOURCES=""
+                    if rebuild_feature_on_integration "$rb_feature"; then
+                        if merge_and_verify_feature "$rb_feature" "$REBUILT_BRANCH" "$REBUILT_SPEC" "$REBUILT_SOURCES" "block"; then
+                            LOOP_TIMINGS+=("✓ $rb_feature: $(format_duration $(($(date +%s) - rb_start))) (rebuild)")
+                        fi
+                    else
+                        warn "Rebuild failed: $rb_feature"
+                        LOOP_FAILED=$((LOOP_FAILED + 1))
+                        mark_roadmap_status_committed "$rb_feature" "⏸️"
+                        LOOP_TIMINGS+=("✗ $rb_feature: rebuild failed ($(format_duration $(($(date +%s) - rb_start))))")
+                    fi
+                done
+            fi
 
             if [ -x "$PROJECT_DIR/scripts/generate-mapping.sh" ]; then
                 log "Regenerating mapping after merge..."
                 "$PROJECT_DIR/scripts/generate-mapping.sh" 2>/dev/null || true
+                if ! git diff --quiet -- .specs/mapping.md 2>/dev/null; then
+                    git add .specs/mapping.md 2>/dev/null || true
+                    git commit -m "chore: regenerate mapping after merge" >/dev/null 2>&1 || true
+                fi
             fi
 
-            if [ "$LOOP_BUILT" -gt 0 ]; then
+            local batch_built=$((LOOP_BUILT - loop_built_before))
+            if [ "$batch_built" -gt 0 ]; then
                 MAIN_BRANCH="$integration_branch"
-                success "Integration branch: $integration_branch ($LOOP_BUILT features merged)"
+                success "Integration branch: $integration_branch ($batch_built features merged this batch)"
             else
                 git checkout "$MAIN_BRANCH" 2>/dev/null || true
                 git branch -D "$integration_branch" 2>/dev/null || true
             fi
         fi
-
-        features_started=$((features_started + batch_size))
     done
 
     cleanup_all_worktrees
@@ -1959,7 +2329,7 @@ echo "Base branch: $MAIN_BRANCH"
 echo "Branch strategy: $BRANCH_STRATEGY"
 echo "Max features: $MAX_FEATURES | Max retries per feature: $MAX_RETRIES"
 if [ "$BRANCH_STRATEGY" = "parallel" ]; then
-    echo "Parallel: $PARALLEL_FEATURES concurrent | Merge: roadmap order | Post-merge: drift + compound"
+    echo "Parallel: $PARALLEL_FEATURES concurrent | Merge: roadmap order, agent-resolved conflicts | Rebuild on conflict: $REBUILD_ON_CONFLICT"
 fi
 echo ""
 echo "Verification commands:"
@@ -1976,7 +2346,7 @@ else
 fi
 echo "Post-build steps: ${POST_BUILD_STEPS:-none}"
 if [ -n "$AGENT_MODEL" ] || [ -n "$SPEC_MODEL" ] || [ -n "$BUILD_MODEL" ] || [ -n "$DRIFT_MODEL" ] || [ -n "$REVIEW_MODEL" ]; then
-    echo "Models: default=${AGENT_MODEL:-CLI default} spec=${SPEC_MODEL:-↑} build=${BUILD_MODEL:-↑} drift=${DRIFT_MODEL:-↑} review=${REVIEW_MODEL:-↑}"
+    echo "Models: default=${AGENT_MODEL:-CLI default} spec=${SPEC_MODEL:-↑} build=${BUILD_MODEL:-↑} drift=${DRIFT_MODEL:-↑} review=${REVIEW_MODEL:-↑} merge=${MERGE_MODEL:-↑}"
 fi
 echo ""
 

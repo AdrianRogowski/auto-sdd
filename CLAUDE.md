@@ -725,14 +725,19 @@ Configuration in `.env.local`:
 ```bash
 BRANCH_STRATEGY=parallel
 PARALLEL_FEATURES=3          # max concurrent agents
+REBUILD_ON_CONFLICT=true     # rebuild unmergeable features on integrated code
+MERGE_MODEL=                 # model for merge-resolution agent (default: AGENT_MODEL)
 ```
 
-Merge conflict resolution:
-- Feature-specific files (specs, new source): merge cleanly
-- Shared append-only files (learnings, roadmap): auto-resolved
-- Auto-generated files (mapping.md): regenerated after merge
-- Source code conflicts: branch preserved, feature marked blocked
-- Drift check catches semantic conflicts that merge cleanly but break spec alignment
+Merge conflict resolution (in order):
+1. **Deterministic rules** for known shared files:
+   - `mapping.md` and `roadmap.md`: integration branch's copy wins (mapping is regenerated after merge; roadmap status is orchestrator-owned and committed immediately so the integration tree stays clean between merges)
+   - `.specs/learnings/*`: line-level union merge (both sides kept; also covered by `.gitattributes merge=union`)
+   - `package.json`: three-way JSON union (dependencies/scripts from both sides), lockfile regenerated afterward
+2. **Merge-resolution agent** for source-file conflicts: a fresh agent (MERGE_MODEL) edits the conflicted files in place mid-merge, producing a semantic union of both features. The post-merge build/test/drift gates validate the result and revert to the pre-merge commit if it is wrong.
+3. **Rebuild pass** for anything still failing: the feature is rebuilt sequentially in a fresh worktree forked from the current integration branch (so the agent implements against the already-integrated code), then merged again. Only if the rebuild also fails is the feature marked ⏸️ blocked with its branch preserved.
+
+Parallel workers do NOT touch shared files (`mapping.md`, `roadmap.md`, `learnings/*`) — the merge phase owns them. The ready-feature list is re-parsed before every batch, so features whose dependencies completed in an earlier batch are picked up in the same run. Drift check catches semantic conflicts that merge cleanly but break spec alignment.
 
 ---
 

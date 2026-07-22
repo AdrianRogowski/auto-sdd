@@ -46,7 +46,10 @@ Use the AskQuestion tool for each section. Group related questions together:
 **Core Settings:**
 1. CLI provider: Cursor (`agent`) or Claude Code (`claude`)?
 2. Branch strategy: chained (default), independent, sequential, parallel, or both?
-3. If parallel: how many concurrent features? (default: 3)
+3. If parallel:
+   - How many concurrent features? (default: 3) → `PARALLEL_FEATURES`
+   - Rebuild conflicted features on integrated code instead of blocking them? (default: true) → `REBUILD_ON_CONFLICT`. When a feature branch can't be merged (or breaks build/tests/drift after merge), it gets rebuilt sequentially in a fresh worktree forked from the integration branch, then merged again. Set false to restore the old behavior (mark ⏸️ and preserve the branch for a human).
+   - Model for the merge-resolution agent? (default: same as `AGENT_MODEL`) → `MERGE_MODEL`. This agent resolves source-file merge conflicts semantically during integration; a stronger model here pays off since bad resolutions cost a full rebuild.
 4. Max features per run? (default: 50 for local, 4 for overnight)
 
 **Integrations (optional):**
@@ -64,7 +67,7 @@ Show auto-detected commands and ask if they look right:
 
 **Model Selection (optional):**
 1. Default model for all steps? (recommend `composer-1.5` for Cursor)
-2. Want different models per phase? (show the phase list: spec, build, refactor, drift, compound, review)
+2. Want different models per phase? (show the phase list: spec, build, refactor, drift, compound, review, merge)
 
 **Overnight Automation (optional):**
 1. Want to set up overnight scheduled runs? → guide through `setup-overnight.sh`

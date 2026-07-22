@@ -2,6 +2,26 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.9.0 — Parallel Mode: Merge Resolution That Actually Merges
+
+Parallel worktree mode previously punted on any source-file merge conflict: the feature was marked ⏸️ blocked, and a cascade bug (uncommitted roadmap edits on the integration branch) could fail an entire batch and strand 5+ roadmap features per run. Conflicts between parallel agent branches are the expected case on a young codebase (every early feature touches `package.json`, the schema, route/layout hub files), not an edge case — so the merge gate now has a real resolution pipeline with the same shape as every other phase: agent attempt, deterministic verification, revert-and-degrade fallback.
+
+### New
+- **Merge-resolution agent** — Source-file conflicts are no longer an instant abort. The conflicted index is left in place mid-merge and a fresh agent (`MERGE_MODEL`, defaults to `AGENT_MODEL`) resolves each file semantically — a union of both features' behavior — then stages the results. The orchestrator verifies no unmerged paths or conflict markers remain before committing, and the existing post-merge build/test/drift gates revert to the pre-merge commit if the resolution is wrong.
+- **Rebuild pass** (`REBUILD_ON_CONFLICT=true`, default) — Features whose merge can't be resolved (or that break build/tests/drift after merging) are rebuilt sequentially in a fresh worktree forked from the current integration branch, so the agent implements against the already-integrated code, then merged again. Worst case degrades to chained-mode speed for that feature; ⏸️ is now the last resort instead of the first response.
+- **Three-way JSON union for `package.json`** — Replaces the lossy `--theirs` rule that silently dropped one side's dependencies. Dependencies and scripts from both sides survive; on true value conflicts the incoming side wins and the build/test gate validates. Lockfiles are regenerated via `--lockfile-only` install (npm/pnpm) instead of taken wholesale from either branch.
+- **Line-level union merge for learnings** — `.specs/learnings/*` conflicts keep both sides' entries (`git merge-file --union`), plus a new `.gitattributes` with `merge=union` for `.specs/learnings/**` so most of these never conflict at all.
+
+### Fixed
+- **Dirty-roadmap cascade** — `mark_roadmap_status` edited `roadmap.md` on the integration branch but never committed, so the next merge refused to start ("local changes would be overwritten"), which was misread as an auto-resolve success, whose failing commit triggered a `reset --hard` that erased earlier status marks. Roadmap status updates are now committed immediately (`mark_roadmap_status_committed`), the tree is verified clean before every merge, and "merge refused to start" is detected separately from "merge conflicted" via `MERGE_HEAD`.
+- **Failure reverts** now reset to a recorded pre-merge commit instead of `HEAD~1`, which was wrong whenever the drift agent had committed fixes between the merge and the failure.
+- **Stale batch state** — The ready-feature list was parsed once per run; now it is re-parsed before every batch, so features whose dependencies completed in an earlier batch are built in the same run. The integration-branch advance decision uses a per-batch counter instead of the run-wide total (which could advance onto an empty integration branch).
+
+### Changed
+- **Parallel workers no longer touch shared files** — Worker spec/implement prompts forbid writing `.specs/mapping.md`, `.specs/roadmap.md`, and `.specs/learnings/*`; the merge phase owns them. Mapping is regenerated and committed once post-merge. This removes two guaranteed conflicts per branch.
+- **`/ralph-setup`** — When parallel is selected, asks about `REBUILD_ON_CONFLICT` and `MERGE_MODEL` (a stronger merge model pays off since a bad resolution costs a full rebuild). Per-phase model list now includes merge.
+- Startup banner and header docs describe the merge pipeline and new config.
+
 ## 2.8.0 — Database Migration Strategy
 
 A migration strategy layered onto SDD across four seams, mirroring how strategy → constitution → spec → tdd already work. Previously the framework only had an *operational* migration step (`MIGRATION_CMD` applies whatever exists, non-blocking); there was no *design* discipline for schema changes and no way to infer a brownfield project's existing migration conventions.

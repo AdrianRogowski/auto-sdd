@@ -1,0 +1,4 @@
+# Append-only spec files: union-merge so parallel branches never conflict here.
+# (Both sides' additions are kept; ordering may interleave, which is fine for
+# learnings logs.)
+.specs/learnings/** merge=union
