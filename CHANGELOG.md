@@ -2,6 +2,15 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.10.0 — Specs Are State, Not Deltas
+
+A spec describes the entire expected behavior of the feature as it exists now; the delta belongs in git history and the pause-point summary. Without this rule, spec updates drift toward change-request language ("add three fields to the form"), and current expected behavior has to be reconstructed from a pile of change notes — the exact failure mode that makes ticket systems miserable to read.
+
+### Changed
+- **`/spec-first`** — New "Specs are state, not deltas" principle in the Create or Update step (both Cursor and Claude Code commands): scenario titles describe behavior, never instructions; mockups show the resulting UI in full, not annotations of what changed; mid-flight requirement changes rewrite the spec to the new truth rather than layering change notes on stale scenarios.
+- **UPDATE mode** — Now explicitly rewrites affected scenarios so the spec reads as the complete current behavior, and removes or rewrites superseded scenarios instead of leaving old and new behavior side by side.
+- **`CLAUDE.md` and `specs-workflow.mdc`** — The principle is stated in the always-loaded context so every agent (not just `/spec-first` invocations) holds specs to it.
+
 ## 2.9.0 — Parallel Mode: Merge Resolution That Actually Merges
 
 Parallel worktree mode previously punted on any source-file merge conflict: the feature was marked ⏸️ blocked, and a cascade bug (uncommitted roadmap edits on the integration branch) could fail an entire batch and strand 5+ roadmap features per run. Conflicts between parallel agent branches are the expected case on a young codebase (every early feature touches `package.json`, the schema, route/layout hub files), not an edge case — so the merge gate now has a real resolution pipeline with the same shape as every other phase: agent attempt, deterministic verification, revert-and-degrade fallback.

@@ -158,6 +158,12 @@ Read `.specs/learnings/index.md` for cross-cutting patterns from previous featur
 
 ### 2. Create or Update Feature Spec
 
+**Specs are state, not deltas.** A spec describes the ENTIRE expected behavior of the feature as it should exist after this change — never the change itself. "Add three fields to the form" is a commit message, not a spec. The delta is recorded by git history and your pause-point summary; the spec is the record of current truth. Someone reading the spec alone must be able to reconstruct the feature's full behavior without digging through earlier versions.
+
+- Scenario titles describe behavior ("Scenario: Submit the form with all required fields"), never instructions ("Scenario: Add three fields to the form")
+- Mockups show the resulting UI in its entirety, not annotations of what changed
+- Requirements changed mid-flight? Same rule: rewrite the spec to the new truth and note the pivot in your summary, don't layer change notes on top of stale scenarios
+
 **CREATE mode:**
 - Create `.specs/features/{domain}/{feature}.feature.md`
 - Write detailed **Gherkin scenarios** covering:
@@ -168,7 +174,8 @@ Read `.specs/learnings/index.md` for cross-cutting patterns from previous featur
 
 **UPDATE mode:**
 - Update the existing spec file
-- Revise scenarios and mockup per user's request
+- Rewrite affected scenarios so the spec reads as the complete current behavior — never append delta scenarios describing the change
+- Remove or rewrite superseded scenarios; do not leave old and new behavior side by side
 - Add new scenarios if user is expanding the feature
 - Preserve existing `status`, `tests`, `components` in frontmatter
 - Set `updated: YYYY-MM-DD`

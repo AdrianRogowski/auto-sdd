@@ -120,6 +120,8 @@ When the user says any of these, **invoke `/infer-migrations`**:
 
 **Create vs Update**: `/spec-first` auto-detects whether to create or update: searches `.specs/features/` for a matching spec (by path or frontmatter `feature:`). Match found → update existing spec. No match → create new spec. With `--full`, both paths continue through the full Red-Green-Refactor TDD cycle.
 
+**Specs are state, not deltas**: a spec always describes the entire expected behavior of the feature as it exists now — "add three fields to the form" is a commit message, not a spec. Updates rewrite affected scenarios to the new truth (removing superseded ones) instead of appending change notes; the delta lives in git history.
+
 ### Full Mode Triggers
 
 If user includes "full", "auto", "no stops", or "don't pause":

@@ -389,6 +389,8 @@ If ASCII mockup references a component that doesn't exist in `.specs/design-syst
 2. **If match found** → UPDATE mode: revise scenarios and mockup, preserve status/tests/components. With `--full`, continues through tests → implement → compound → commit
 3. **If no match** → CREATE mode: load personas + tokens, create new spec with Gherkin + ASCII mockup + user journey, revise through persona lens
 
+**Specs are state, not deltas.** In both modes the spec describes the entire expected behavior of the feature as it exists now — "add three fields to the form" is a commit message, not a spec. UPDATE mode rewrites affected scenarios to the new truth (removing superseded ones) rather than appending change notes; the delta lives in git history and the pause-point summary.
+
 ### What happens in the SPEC step:
 
 1. **Load context** — Read strategy, constitution, personas, design tokens, learnings index
