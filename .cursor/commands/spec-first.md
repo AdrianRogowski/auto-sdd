@@ -186,6 +186,14 @@ Read `.specs/learnings/index.md` for cross-cutting patterns from previous featur
 - Reference the persona's frustrations as anti-patterns to avoid
 - Ensure the happy path achieves the persona's success metric
 
+**Simplified Technical English (STE) for Gherkin + mockup copy only:**
+Write scenarios and UI labels in an ASD-STE100 *style* (not full aerospace compliance). Goal: every Then is observable and testable.
+- Short active sentences; one idea per Given/When/Then line
+- Prefer plain verbs: show, hide, open, close, create, delete, save, send, fail, select, enter
+- Same noun for the same thing in all scenarios (`user` stays `user`; do not mix synonyms)
+- No marketing or vague quality words (seamless, intuitive, delightful, frictionless, robust, etc.)
+- Does **not** apply to Technical Design, Program Design, or Implementation Slices — those stay normal engineering prose
+
 Include YAML frontmatter:
 ```yaml
 ---
@@ -288,12 +296,17 @@ Key signatures:
 
 ### 4. Create or Update ASCII Mockup
 
-- Add or update `## UI Mockup` section with ASCII art showing:
-  - Component layout and structure
-  - Key interactive elements
-  - States (default, hover, active, disabled, loading, error)
-- Reference design tokens where applicable
-- Use persona vocabulary in all labels and placeholder text
+Mockups are a **screen inventory**, not a layout skeleton. Weak models copy the example's density: match or exceed the template below.
+
+- Add or update `## UI Mockup` with ASCII art that includes, when relevant:
+  - App chrome (nav, breadcrumbs, search, user menu) if the feature lives in a real page
+  - Primary content region + secondary regions (sidebar, related, meta, details table)
+  - Every interactive control a user can hit (buttons, inputs, dropdowns, checkboxes, links)
+  - States: default, loading, error (banner + field-level), empty, success; add hover/focus/disabled callouts when they matter
+  - Mobile (stacked) when the feature is responsive
+  - Token callouts next to the mockup (bg, text, primary button, error, spacing)
+- Use persona vocabulary in all labels and placeholder text (STE-style: short, plain, testable)
+- Do **not** stop at "header + blurb + two buttons" unless that truly is the whole screen
 
 ### 5. Create Component Stubs
 
@@ -531,46 +544,215 @@ Key signatures:
 
 ## UI Mockup
 
+<!-- Density bar: include chrome, primary + secondary regions, all controls, and the states below.
+     Replace labels with persona vocabulary. Omit regions that truly do not exist for this feature. -->
+
 ### Default State
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Header / Title                                      │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                             │
-│  ┌─────────┐  ┌─────────────────────────────────────────┐   │
-│  │         │  │ Content area                            │   │
-│  │  Image  │  │                                         │   │
-│  │         │  │ Secondary text or description           │   │
-│  └─────────┘  └─────────────────────────────────────────┘   │
-│                                                             │
-│  ┌─────────────────────┐  ┌─────────────────────┐          │
-│  │  Primary Action     │  │  Secondary Action   │          │
-│  └─────────────────────┘  └─────────────────────┘          │
-└─────────────────────────────────────────────────────────────┘
++==============================================================================+
+|  App Name                                              [Search________]  (n) |
+|  Home > Section > This page                                              You v|
++==========================================+===================================+
+|                                          |                                   |
+|  PAGE TITLE                              |  Related                          |
+|  Short supporting line about the task.   |  +-----------------------------+  |
+|                                          |  | Tip: complete this first    |  |
+|  +--------------+  +------------------+  |  +-----------------------------+  |
+|  |              |  | Content title    |  |                                   |
+|  |              |  |                  |  |  +-----------------------------+  |
+|  |    IMAGE     |  | Body text that   |  |  | * Item one                  |  |
+|  |   240x180    |  | explains what    |  |  | * Item two                  |  |
+|  |              |  | the user sees.   |  |  | * Item three                |  |
+|  |              |  |                  |  |  +-----------------------------+  |
+|  |  [Zoom]      |  | Meta: Updated 2h |  |                                   |
+|  +--------------+  | Status: Ready    |  |                                   |
+|                    +------------------+  |                                   |
+|                                          |                                   |
+|  Details                                 |                                   |
+|  +------------------------------------+  |                                   |
+|  | Label          Value               |  |                                   |
+|  | Name           Example item        |  |                                   |
+|  | Owner          Ada                 |  |                                   |
+|  | Due            Jul 30              |  |                                   |
+|  +------------------------------------+  |                                   |
+|                                          |                                   |
+|  +----------------+  +--------------+  +------------+                       |
+|  | Primary Action |  | Secondary    |  | Cancel     |                       |
+|  |  (filled)      |  |  (outline)   |  | (ghost)    |                       |
+|  +----------------+  +--------------+  +------------+                       |
+|                                          |                                   |
++==========================================+===================================+
+
+Focus / hover (call out when it matters):
+  Primary Action   [################]  <- keyboard focus ring
+  Secondary        [................]  <- hover: stronger border
+  Cancel           Cancel              <- text-only
+```
+
+### Edit / Form Variant (when the feature has inputs)
+```
++==============================================================================+
+|  App Name                                                         (n)   You v|
++==============================================================================+
+|  PAGE TITLE                                                                  |
+|  Edit the fields below, then save.                                           |
+|                                                                              |
+|  +--------------+                                                            |
+|  |    IMAGE     |  Image                                                     |
+|  |              |  [Replace image]  [Remove]                                 |
+|  +--------------+                                                            |
+|                                                                              |
+|  Title *                                                                     |
+|  [Example item________________________________________________]              |
+|                                                                              |
+|  Description                                                                 |
+|  +------------------------------------------------------------+              |
+|  | Body text that explains what the user sees.                |              |
+|  |                                                            |              |
+|  +------------------------------------------------------------+              |
+|                                                                              |
+|  Owner          [Ada            v]     Due    [2026-07-30]                   |
+|                                                                              |
+|  Options                                                                     |
+|  [x] Notify owner     [ ] Pin to top     ( ) Public  (*) Private             |
+|                                                                              |
+|  +------------+  +------------+                                              |
+|  | Save       |  | Cancel     |                                              |
+|  +------------+  +------------+                                              |
++==============================================================================+
 ```
 
 ### Loading State
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│    │
-│  └─────────────────────────────────────────────────────┘    │
-│  ┌─────────┐  ┌─────────────────────────────────────────┐   │
-│  │ ░░░░░░░ │  │ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│   │
-│  │ ░░░░░░░ │  │ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│   │
-│  └─────────┘  └─────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
++==============================================================================+
+|  App Name                                              [##########]  o   You |
++==========================================+===================================+
+|  ################                        |  ########                         |
+|  ########################                |  +-----------------------------+  |
+|                                          |  | ########################### |  |
+|  +--------------+  +------------------+  |  +-----------------------------+  |
+|  |##############|  |##################|  |  +-----------------------------+  |
+|  |##############|  |##################|  |  | ###############             |  |
+|  |##############|  |##########        |  |  | #################           |  |
+|  +--------------+  +------------------+  |  +-----------------------------+  |
+|                                          |                                   |
+|  #######                                 |                                   |
+|  +------------------------------------+  |                                   |
+|  |########  ##########################|  |                                   |
+|  |########  ###############           |  |                                   |
+|  +------------------------------------+  |                                   |
+|                                          |                                   |
+|  +----------------+  +--------------+   (actions disabled)                   |
+|  |################|  |##############|                                        |
+|  +----------------+  +--------------+                                        |
++==========================================+===================================+
+(In real specs prefer light-shade skeleton characters for loading blocks.)
 ```
 
 ### Error State
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  ┌─ Error (border: error, bg: error-light) ─────────────┐   │
-│  │  ⚠️ [Error message in persona's language]             │   │
-│  │  [Retry Button]                                      │   │
-│  └──────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
++==============================================================================+
+|  App Name                                                         (n)   You v|
++==============================================================================+
+|  +-- error · border:error · bg:error-light --------------------------------+ |
+|  |  Could not load this page.                                              | |
+|  |  Check your connection, then try again.                 [ Try again ]   | |
+|  +-------------------------------------------------------------------------+ |
+|                                                                              |
+|  PAGE TITLE                                                                  |
+|                                                                              |
+|  +--------------+  +------------------+                                      |
+|  |   (broken)   |  | Content title    |                                      |
+|  |      / \     |  | Content is stale |                                      |
+|  |     / ! \    |  | or incomplete.   |                                      |
+|  |    /_____\   |  |                  |                                      |
+|  +--------------+  +------------------+                                      |
+|                                                                              |
+|  Title *                                                                     |
+|  [________________________________________________]                          |
+|   |- Enter a title.                                                          |
+|                                                                              |
+|  +------------+  +------------+                                              |
+|  | Save       |  | Cancel     |   Save disabled until errors clear           |
+|  +------------+  +------------+                                              |
++==============================================================================+
+```
+
+### Empty State
+```
++==============================================================================+
+|  App Name                                                         (n)   You v|
++==============================================================================+
+|                                                                              |
+|                         +--------------------+                               |
+|                         |   (empty frame)    |                               |
+|                         +--------------------+                               |
+|                                                                              |
+|                      No items yet                                            |
+|               Create the first one to start.                                 |
+|                                                                              |
+|                         [ Primary Action ]                                   |
+|                                                                              |
++==============================================================================+
+```
+
+### Success Toast (over default)
+```
+                              +------------------------------+
+                              | Saved.                  [x]  |
+                              +------------------------------+
+```
+
+### Mobile (375px)
+```
++-------------------------+
+| =  App Name        (n)  |
++-------------------------+
+| Home > This page        |
+|                         |
+| PAGE TITLE              |
+| Short supporting line.  |
+|                         |
+| +---------------------+ |
+| |       IMAGE         | |
+| +---------------------+ |
+|                         |
+| Content title           |
+| Body text that explains |
+| what the user sees.     |
+|                         |
+| Meta: Updated 2h        |
+| Status: Ready           |
+|                         |
+| Details                 |
+| Name   Example item     |
+| Owner  Ada              |
+| Due    Jul 30           |
+|                         |
+| +---------------------+ |
+| |   Primary Action    | |
+| +---------------------+ |
+| +---------------------+ |
+| |   Secondary         | |
+| +---------------------+ |
+|       Cancel            |
+|                         |
+| Related                 |
+| * Item one              |
+| * Item two              |
++-------------------------+
+```
+
+### Token Callouts
+```
+bg page ........ color-background / canvas
+panels ......... color-surface
+title .......... color-text · text-xl · font-semibold
+body ........... color-text-secondary · text-sm
+primary btn .... color-primary · radius-md
+secondary btn .. border · color-text · radius-md
+error banner ... color-error · error-light surface
+spacing ........ spacing-4 between blocks, spacing-2 inside rows
 ```
 
 ## Strategy Alignment
@@ -709,7 +891,20 @@ These signals enable the automated drift-check that runs after your commit.
 
 ## ASCII Mockup Guidelines
 
+### Density bar (do not under-draw)
+
+Match the `## UI Mockup` template above. Minimum for a real page feature:
+1. Chrome (nav / breadcrumbs / user) when the feature is not a naked component
+2. Primary content + any secondary region (sidebar, meta, details)
+3. Every control the user can activate
+4. Default + loading + error; add empty / success / form / mobile when they apply
+5. Token callouts
+
+A mockup that is only "title + paragraph + two buttons" is too thin unless that is literally the whole UI.
+
 ### Box Drawing Characters
+
+Use either box-drawing (`┌─┐│└┘├┤`) or plain ASCII (`+ - |`). Prefer box-drawing when the environment renders it; plain ASCII is fine for weaker models.
 
 ```
 ┌─────┐   Top-left corner, horizontal line, top-right corner
@@ -727,48 +922,48 @@ These signals enable the automated drift-check that runs after your commit.
 [x] Checkbox      - Checked checkbox
 [ ] Checkbox      - Unchecked checkbox
 [Input field___]  - Text input
-[Dropdown ▼]      - Select/dropdown
-░░░░░░░░░░░░░░    - Loading skeleton
-⚠️ ❌ ✅ ℹ️        - Status icons (use sparingly)
+[Dropdown v]      - Select/dropdown
+##########        - Loading skeleton (or light-shade blocks)
+(n)               - Notification / status affordance
 ```
 
 ### Layout Patterns
 
 ```
 # Side by side
-┌───────┐  ┌───────┐
-│ Left  │  │ Right │
-└───────┘  └───────┘
++-------+  +-------+
+| Left  |  | Right |
++-------+  +-------+
 
 # Stacked
-┌─────────────────┐
-│ Top             │
-├─────────────────┤
-│ Bottom          │
-└─────────────────┘
++-----------------+
+| Top             |
++-----------------+
+| Bottom          |
++-----------------+
 
 # Nested
-┌─────────────────────────────┐
-│ Parent                      │
-│  ┌─────────────────────┐    │
-│  │ Child               │    │
-│  └─────────────────────┘    │
-└─────────────────────────────┘
++-----------------------------+
+| Parent                      |
+|  +---------------------+    |
+|  | Child               |    |
+|  +---------------------+    |
++-----------------------------+
 ```
 
 ### Responsive Hints
 
 ```
-# Mobile (320px)
-┌───────────────┐
-│ Stacked       │
-│ Layout        │
-└───────────────┘
+# Mobile (375px)
++---------------+
+| Stacked       |
+| Layout        |
++---------------+
 
 # Desktop (1024px+)
-┌───────────────────────────────────────────────────┐
-│ Sidebar │ Main Content Area                       │
-└───────────────────────────────────────────────────┘
++---------------------------------------------------+
+| Sidebar | Main Content Area                       |
++---------------------------------------------------+
 ```
 
 ---

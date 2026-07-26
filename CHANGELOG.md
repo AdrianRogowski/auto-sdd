@@ -2,6 +2,15 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.12.0 — Clearer Gherkin (STE) and Dense ASCII Mockups
+
+Weaker models copy the density of the `/spec-first` example. Thin mockups and vague Gherkin ("seamless", "intuitive") produce thin, untestable specs. This release raises the exemplar and constrains scenario language so `/tdd` gets observable acceptance criteria.
+
+### Changed
+- **`/spec-first` STE for Gherkin + mockup copy** — ASD-STE100 *style* (not full aerospace compliance): short active sentences, plain verbs, consistent nouns, no marketing/vague quality words. Technical Design stays normal engineering prose.
+- **ASCII mockups are a screen inventory** — Step 4 and guidelines require chrome, secondary regions, all controls, loading/error/empty/success (and form/mobile when relevant), plus token callouts. "Title + two buttons" is too thin unless that is the whole UI.
+- **Richer mockup template** — Default, edit/form, loading, error, empty, success toast, mobile (375px), and token callouts replace the previous three-box skeleton.
+
 ## 2.11.0 — Program Design, Vertical Slices, One Canonical Command Set
 
 Models get no training penalty for eroding codebase structure, and left alone they plan features in stack order (migrations → services → API → frontend) that produces nothing verifiable until everything is done. This release pins the shape of the code before implementation, builds in vertical slices that end in a curl/click/test checkpoint, and stops maintaining two drifting copies of every slash command.
