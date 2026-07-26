@@ -5,6 +5,10 @@
       {
         "command": ".cursor/hooks/regenerate-mapping.sh",
         "matcher": "\\.feature\\.md$"
+      },
+      {
+        "command": "./scripts/sync-commands.sh",
+        "matcher": "\\.cursor/commands/.*\\.md$"
       }
     ],
     "sessionStart": [

@@ -214,9 +214,46 @@ Include only what's relevant to this feature:
 - **API contracts** (if applicable): Endpoints, request/response shapes, error codes. Skip for purely client-side features.
 - **State management**: Where does state live? (URL params, local state, global store, server cache) What are the key state transitions?
 - **Key dependencies**: Which existing modules/services does this feature depend on? What new ones does it introduce?
+- **Program Design**: The shape of the code — file-tree diff, key signatures, call stack. See below.
+- **Implementation Slices**: Vertical slices for M/L features. See below.
 - **Migration Plan** (only if the Data Model changes): How the schema change ships safely — see below.
 
 Keep it lightweight — a few bullet points per section, not a full design doc. The goal is to constrain implementation choices enough that two different agents would build roughly the same thing.
+
+**Program Design — the shape of the code, one level below architecture.** Models get no training penalty for bad structure, so structural decisions made implicitly during implementation trend toward slop (new modules that duplicate existing ones, 800-line handlers, logic copied into three places). Pinning the shape here forces those decisions to happen deliberately, before the build agent free-associates them. This section is a contract for `/tdd` and a verification target for drift checks — and after implementation it IS the documentation of how the code is laid out (specs are state: it must always describe the code as it exists now, so drift checks reconcile it just like scenarios). Include:
+
+- **File-tree diff**: which files are created or modified, one line each
+- **Call stack**: who calls what, as an indented tree from the entry point
+- **Key signatures**: the 3-5 functions/types that matter, with one-line purpose
+
+Before writing this, search the codebase for existing modules that already do part of the job — the most common structural slop is reinventing something that exists.
+
+**Implementation Slices — vertical, not horizontal.** Left alone, agents plan in stack order (migrations → services → API → frontend), which means nothing is verifiable until everything is done and the diff lands as one unreviewable block. Instead, for M/L features, break implementation into 2-4 vertical slices where EACH slice ends in a verifiable state — something you can curl, click, or run tests against. Work middle-out: contract with mock data first, then consumers, then real wiring. Skip this section for S features (single-pass is fine).
+
+```markdown
+### Program Design
+
+Files:
+  src/api/export.ts          (new)
+  src/services/csv.ts        (new)
+  src/pages/Deals.tsx        (modified: add Export button)
+
+Call stack:
+  DealsPage.onExportClick
+  └─ POST /api/export
+     └─ exportDeals(filters: DealFilters): Promise<{url: string}>
+        └─ buildCsv(rows: Deal[]): string
+
+Key signatures:
+- `exportDeals(filters: DealFilters): Promise<{url: string}>` — orchestrates query + CSV build + upload
+- `buildCsv(rows: Deal[]): string` — pure formatter, no I/O
+
+### Implementation Slices
+
+1. `POST /api/export` returns mock CSV URL — verify: curl returns 200 + shape
+2. Export button + download flow against mock — verify: click in browser, file downloads
+3. Wire to real DealService + buildCsv — verify: full test suite + real export
+```
 
 **Migration Plan — include ONLY when this feature adds, changes, or drops a persisted entity, column, type, index, or constraint.** Follow the conventions in `.specs/migrations.md` (run `/infer-migrations` first if it doesn't exist). Classify the change and state how it ships:
 
@@ -464,6 +501,25 @@ Then [error handling behavior]
 - Uses: [existing modules, services, components]
 - Introduces: [new modules this feature creates]
 
+### Program Design
+<!-- The shape of the code. Written as a plan; after implementation it must describe the code as it exists (drift checks reconcile it). -->
+
+Files:
+  [path]    ([new | modified: what changes])
+
+Call stack:
+  [EntryPoint]
+  └─ [function(args): ReturnType]
+     └─ [function(args): ReturnType]
+
+Key signatures:
+- `[functionName(args): ReturnType]` — [one-line purpose]
+
+### Implementation Slices
+<!-- M/L features only. 2-4 vertical slices, each ending in a verifiable state. GREEN implements one slice at a time. -->
+1. [Slice — what works at the end of it] — verify: [curl / browser / tests]
+2. [Slice] — verify: [how]
+
 ### Migration Plan
 <!-- Include ONLY if the Data Model changes. Follow .specs/migrations.md conventions. -->
 - **Change class**: [additive (safe) | destructive | data transform]
@@ -574,9 +630,10 @@ The steps below follow the `/tdd` command flow. See `/tdd` for the standalone ve
 6. Proceed immediately to GREEN (no pause between RED and GREEN)
 
 ### Step 3: GREEN — Implement Until Tests Pass
-1. Implement feature incrementally
+1. Implement slice by slice per the spec's `### Implementation Slices` (each slice ends verifiable: curl it, click it, or run its tests before starting the next). No slices section (S feature) → single pass. Follow the `### Program Design` contract; if reality forces a deviation, update Program Design to match what you built and note it as a failure signal for compound
 2. Use design tokens from `.specs/design-system/tokens.md`
-3. Follow component patterns from design system
+3. Read `.specs/design-system/DESIGN.md` before implementing UI (component variants, Do's/Don'ts)
+4. Follow component patterns from design system
 4. Run tests frequently
 5. Loop until all tests pass
 6. Update spec frontmatter: `status: implemented`, add components to `components: []`
@@ -590,6 +647,7 @@ Verify your implementation matches your spec while you still have full context:
 2. For each scenario, verify the code you just wrote implements it
 3. Check for behaviors you implemented that aren't in the spec
 4. Check for scenarios in the spec that aren't implemented
+5. **Structural check**: compare `### Program Design` (files, signatures, call stack) to the actual code — update it to describe reality if they diverged
 
 **If drift found:**
 - Update the spec to match what you actually built (document reality)
@@ -733,7 +791,7 @@ These signals enable the automated drift-check that runs after your commit.
    - Edit profile validation errors
    - Avatar upload
    - Cancel editing
-5. **Add technical design** — data model, API contracts, state management, key dependencies
+5. **Add technical design** — data model, API contracts, state management, key dependencies, program design (files, signatures, call stack), implementation slices
 6. **Create ASCII mockups** (referencing design tokens):
    - View mode
    - Edit mode

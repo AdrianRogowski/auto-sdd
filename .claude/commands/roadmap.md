@@ -29,6 +29,7 @@ Manage the roadmap for: $ARGUMENTS
    - **M**: 3-7 files, multiple components
    - **L**: 7-15 files, full feature
    - If bigger than L, break down further
+   - **Vertical, not horizontal**: every row must be independently demoable by a user when done — a screen, flow, or endpoint someone can click or curl. Never create layer rows like "set up database schema", "build service layer", or "API endpoints". Layers are implementation detail that belongs in a feature spec's `### Implementation Slices`, not on the roadmap. If a candidate feature is a layer, merge it into the user-facing feature it serves
 5. Identify dependencies between features
 6. Group into phases (4-8 features each, descriptive names, clear goals). If strategy exists, phase names should reflect the strategy's progression (e.g., "Phase 1: Core Value / Time-to-Aha" for PLG, "Phase 1: Enterprise Onboarding" for top-down)
 7. Write roadmap.md with Implementation Rules, Progress, Phases, Status/Complexity Legends, Notes
@@ -38,8 +39,9 @@ Manage the roadmap for: $ARGUMENTS
 
 1. Read existing roadmap to understand phases, numbering, dependencies
 2. Classify new feature(s): complexity, dependencies, placement (existing phase / new phase / ad-hoc)
-3. Break down large features into multiple items
-4. Show diff and confirm before applying
+3. Break down large features into multiple items — each item must stay vertical (user-demoable), never a layer
+4. If the requested feature is layer-shaped ("add the API for X"), fold it into the user-facing feature it serves instead of adding a row
+5. Show diff and confirm before applying
 
 ### Reprioritize Mode
 
@@ -56,7 +58,7 @@ Show progress table by phase, overall percentage, next feature, blocked items, a
 ### Import Mode (Jira)
 
 1. Fetch epics → map to Phases
-2. Fetch stories under each epic → map to Features
+2. Fetch stories under each epic → map to Features. Jira stories are often layer-shaped ("build the API", "create the schema") — merge those into the user-facing feature they serve so every roadmap row stays vertical
 3. Story points/priority → Complexity estimates
 4. Jira keys → Source column
 5. Show draft, wait for approval

@@ -45,7 +45,8 @@ Compare versions:
 
 Do the same for:
 - `.cursor/rules/*.mdc` vs `.sdd-upgrade/.cursor/rules/*.mdc`
-- `.claude/commands/*.md` vs `.sdd-upgrade/.claude/commands/*.md` (if `.claude/` exists in staging)
+
+`.claude/commands/` is GENERATED from `.cursor/commands/` by `scripts/sync-commands.sh` — do not inventory or merge it separately. It gets regenerated in Step 5.
 
 Output inventory:
 
@@ -126,13 +127,15 @@ cp .sdd-upgrade/.cursor/commands/{name}.md .cursor/commands/{name}.md
 
 This replaces existing stock commands AND adds new ones.
 
-Do the same for `.claude/commands/` if the staging directory has them:
+Then regenerate `.claude/commands/` from the canonical `.cursor/commands/`:
 
 ```bash
-[ -d .sdd-upgrade/.claude/commands ] && cp .sdd-upgrade/.claude/commands/*.md .claude/commands/
+./scripts/sync-commands.sh
 ```
 
-**Do NOT touch files that only exist in the project's commands/ (custom commands).**
+(If the project predates sync-commands.sh, it was just copied in with the other scripts in the previous step. The sync is safe for custom commands: a file that exists only in `.claude/commands/` is adopted back into `.cursor/commands/`, never deleted.)
+
+**Do NOT touch files that only exist in the project's `.cursor/commands/` (custom commands).**
 
 ---
 

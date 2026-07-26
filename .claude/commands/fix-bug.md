@@ -1,8 +1,6 @@
----
-description: Fix a bug with proper regression testing
----
+# Bug Fix Mode
 
-Fix bug: $ARGUMENTS
+Investigate and fix a bug with proper regression testing.
 
 ## Workflow
 
@@ -12,27 +10,43 @@ Fix bug: $ARGUMENTS
 
 ### 2. Locate
 - Find relevant tests in `.specs/test-suites/`
-- Check if existing tests should have caught this
+- Identify if existing tests should have caught this
 
 ### 3. Reproduce
 - Write a failing test that captures the bug
-- This test should FAIL before the fix
+- This test should fail BEFORE the fix
 
 ### 4. Fix
-- Make minimal code change to fix
+- Make the minimal code change to fix the bug
 - Avoid unrelated refactoring
 
 ### 5. Verify
-- Run new test (should pass now)
-- Run related tests (should still pass)
+- Run the new test - it should pass now
+- Run related tests - they should still pass
 
 ### 6. Document
-- Add test to test suite doc
-- Format: `{PREFIX}-{NUM} | Regression: {bug description}`
-- Add change log entry
+- Add the test to the test suite doc in `.specs/test-suites/`
+- Use format: `{PREFIX}-{NUM} | Regression: {bug description}`
+- Add entry to change log
 
 ## If No Spec Exists
 
-1. Ask what correct behavior should be
-2. Add scenario to feature spec
-3. Then proceed with fix
+If there's no feature spec defining expected behavior:
+1. I'll ask what the correct behavior should be
+2. Add the scenario to the feature spec
+3. Then proceed with the fix
+
+This ensures we document the expected behavior for future reference.
+
+## Example Usage
+
+User: "/fix-bug the date formatter returns incorrect timezone"
+
+I will:
+1. Check `.specs/features/` for date formatting behavior
+2. Check `.specs/test-suites/` for existing date tests
+3. Write a failing test for this specific bug
+4. Fix the date calculation
+5. Verify the test passes
+6. Document the regression test
+

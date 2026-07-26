@@ -1,9 +1,3 @@
----
-description: Discover (brownfield) or define (greenfield) the database migration strategy and write .specs/migrations.md
----
-
-Create or update the migration playbook: $ARGUMENTS
-
 # Infer Migrations — Discover or Define the Database Migration Strategy
 
 Create `.specs/migrations.md` — the project's migration playbook. On a **brownfield** project this command *infers* the conventions already in use (tool, naming, ordering, reversibility, backfill habits). On a **greenfield** project it *defines* a sensible strategy from the tech stack and constitution.

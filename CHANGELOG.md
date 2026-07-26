@@ -2,6 +2,21 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.11.0 — Program Design, Vertical Slices, One Canonical Command Set
+
+Models get no training penalty for eroding codebase structure, and left alone they plan features in stack order (migrations → services → API → frontend) that produces nothing verifiable until everything is done. This release pins the shape of the code before implementation, builds in vertical slices that end in a curl/click/test checkpoint, and stops maintaining two drifting copies of every slash command.
+
+### New
+- **Program Design** (in `/spec-first` Technical Design) — File-tree diff, call stack, and key signatures. An agent contract during `/tdd`, and after implementation the documentation of how the code is laid out. Drift checks reconcile it the same way they reconcile Gherkin scenarios (specs are state).
+- **Implementation Slices** (M/L features) — 2–4 vertical slices, each ending in a verifiable state. `/tdd` GREEN and the build-loop implement prompts work one slice at a time (verify + commit per slice) instead of horizontal layers. Intermediate mock scaffolding is allowed; the finished feature must still be real end-to-end.
+- **Structural Drift** — `/catch-drift` and the Layer-2 prompts in `build-loop-local.sh`, `overnight-autonomous.sh`, and `drift-scan-all.sh` compare Program Design (files, signatures, call stack) against the actual code.
+- **Roadmap vertical guardrail** — Every roadmap row must be user-demoable (a screen, flow, or endpoint). Layer-shaped rows ("build the API", "set up the schema") are folded into the feature they serve; slices live in the spec, not on the roadmap.
+- **`scripts/sync-commands.sh`** — `.cursor/commands/` is the canonical source; `.claude/commands/` is generated from it as real copies (Claude Code's command discovery has repeatedly broken on symlinks). Custom commands that exist only on the Claude side are adopted into the canonical dir, never deleted. `--check` exits nonzero when out of sync. A Cursor `afterFileEdit` hook keeps the mirror current.
+
+### Changed
+- **Command consolidation** — The previously condensed `.claude/commands/` variants are replaced by the full Cursor bodies. Claude-side improvements worth keeping (`compound`'s "When NOT to Compound", `update-test-docs`' generic test paths) were merged into the canonical files first. `sdd-migrate` regenerates `.claude/commands/` via the sync script instead of merging it as a separate file set. `CLAUDE.md` documents the canonical-source rule.
+- **`CLAUDE.md` and `specs-workflow.mdc`** — Spec format and TDD flow mention Program Design, Implementation Slices, and structural drift.
+
 ## 2.10.0 — Specs Are State, Not Deltas
 
 A spec describes the entire expected behavior of the feature as it exists now; the delta belongs in git history and the pause-point summary. Without this rule, spec updates drift toward change-request language ("add three fields to the form"), and current expected behavior has to be reconstructed from a pile of change notes — the exact failure mode that makes ticket systems miserable to read.

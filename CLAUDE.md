@@ -2,6 +2,8 @@
 
 This project uses a spec-driven development workflow. Follow these rules in all interactions.
 
+> **Command files**: `.cursor/commands/` is the canonical source for all slash commands. `.claude/commands/` is generated from it by `./scripts/sync-commands.sh` (real copies, not symlinks — Claude Code's command discovery doesn't reliably follow symlinks). To change a command, edit it in `.cursor/commands/` and run the sync script. Never edit `.claude/commands/` directly.
+
 ## Core Principle
 
 **Spec before code.** Define behavior before implementing it.
@@ -395,7 +397,7 @@ If ASCII mockup references a component that doesn't exist in `.specs/design-syst
 
 1. **Load context** — Read strategy, constitution, personas, design tokens, learnings index
 2. **Write Gherkin** — Scenarios using persona vocabulary, matching patience level
-3. **Write technical design** — Data model, API contracts, state management, key dependencies (bridges WHAT→HOW)
+3. **Write technical design** — Data model, API contracts, state management, key dependencies, program design (files, signatures, call stack), implementation slices (bridges WHAT→HOW)
 4. **Write mockup** — ASCII art referencing design tokens
 5. **Add strategy alignment** — How this feature supports the business strategy (if strategy.md exists)
 6. **Add constitutional compliance** — Which constraints apply and how they're addressed (if constitution.md exists)
@@ -407,8 +409,8 @@ If ASCII mockup references a component that doesn't exist in `.specs/design-syst
 ### What happens in the /tdd step (Red-Green-Refactor):
 
 1. **RED** — Write failing tests from Gherkin scenarios + Technical Design
-2. **GREEN** — Implement until all tests pass (track failure signals: test retries, build failures)
-3. **Drift Check L1** — Self-check spec vs code alignment (track drift as failure signal)
+2. **GREEN** — Implement vertical slice by vertical slice until all tests pass, verifying and committing each slice (track failure signals: test retries, build failures)
+3. **Drift Check L1** — Self-check spec vs code alignment, including Program Design vs actual structure (track drift as failure signal)
 4. **REFACTOR** — Clean up code, tests must still pass
 5. **Drift Check L1b** — Re-verify after refactoring (track drift as failure signal)
 6. **COMPOUND** — Always runs. Extracts learnings AND failure signals (drift, retries, spec gaps, corrections)
@@ -559,6 +561,16 @@ Then [expected result]
 ### Key Dependencies
 - Uses: [existing modules, services, components]
 - Introduces: [new modules this feature creates]
+
+### Program Design
+<!-- The shape of the code: file-tree diff, call stack, key signatures. Kept in sync with reality by drift checks — it is the documentation of how the code is laid out. -->
+- Files: [created / modified, one line each]
+- Call stack: [who calls what, indented tree]
+- Key signatures: [the 3-5 functions/types that matter]
+
+### Implementation Slices
+<!-- M/L features only. 2-4 vertical slices, each ending in a verifiable state (curl, click, or test). GREEN implements one at a time. -->
+1. [Slice] — verify: [how]
 
 ## Strategy Alignment
 

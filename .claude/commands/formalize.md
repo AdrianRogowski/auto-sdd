@@ -1,46 +1,71 @@
----
-description: Convert prototype to production code with specs and tests
----
+# Formalize Prototype
 
-Formalize prototype: $ARGUMENTS
+Convert a prototype into production-ready code with full specs and tests.
 
-## Before Starting
+## When to Use
 
-Ask:
-1. What parts should be kept vs changed?
-2. Any new requirements discovered during prototyping?
-3. What edge cases should we handle?
+After a `/prototype` exploration is approved and should become real code.
 
-## Workflow (TDD)
+## Workflow (TDD Flow)
 
 ```
-SPEC → TEST (failing) → IMPLEMENT (until pass)
+SPEC → TEST → IMPLEMENT
+ ▲      │        │
+ │      │        │
+ └──────┴────────┘ (loop until tests pass)
 ```
 
 ### 1. Review Prototype
-- Identify what works
-- Note production requirements
-- Find `// TODO: Add specs and tests` comments
+- Identify what works and should be kept
+- Note what needs to change for production
+- Find all `// TODO: Add specs and tests` comments
 
 ### 2. Create Feature Spec
-- Write Gherkin scenarios based on prototype
-- Add edge cases the prototype skipped
+- Write Gherkin scenarios based on prototype behavior
+- Add edge cases the prototype might have skipped
 - Document in `.specs/features/`
 
 ### 3. Write Tests (Should Fail)
-- Cover all scenarios
+- Cover all Gherkin scenarios
 - Add edge case tests
+- Tests should FAIL initially (prototype code isn't production-ready yet)
 - Document in `.specs/test-suites/`
-- Update mapping.md
+- Update `.specs/mapping.md`
 
 ### 4. Implement to Production Standards
 - Remove hardcoded/mock data
 - Add proper error handling
-- Follow existing patterns
-- Add TypeScript types
-- Loop until ALL tests pass
+- Follow existing code patterns and conventions
+- Add TypeScript types if missing
+- Integrate properly with existing code
+- Loop: implement → run tests → fix → repeat
+- Done when ALL tests pass
 
-### 5. Clean Up
-- Run all tests
+### 5. Verify & Clean Up
+- Run all tests (should pass now)
+- Check for linting errors
+- Verify integration with existing features
 - Remove prototype TODO comments
-- Update mapping.md with final paths
+- Update `.specs/mapping.md` with final production file paths (replace any prototype paths)
+
+## Before Starting
+
+I'll ask:
+1. "What parts of the prototype should be kept vs. changed?"
+2. "Any new requirements discovered during prototyping?"
+3. "What edge cases should we handle?"
+
+## Example Usage
+
+User: "/formalize the deal velocity chart"
+
+I will:
+1. Review the prototype chart component
+2. Ask about any changes needed
+3. Create `.specs/features/deals/deal-velocity-chart.feature.md`
+4. Write failing tests covering all scenarios
+5. Create `.specs/test-suites/components/DealVelocityChart.tests.md`
+6. Update mapping (initial)
+7. Refactor component to production standards (until tests pass)
+8. Remove prototype TODO comments
+9. Finalize mapping with production file paths

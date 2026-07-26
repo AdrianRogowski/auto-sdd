@@ -13,7 +13,7 @@ Regenerate or update test suite documentation to match actual tests.
 
 For the specified test file (or all if none specified):
 
-1. **Read** the test file(s) in `tests/frontend/`
+1. **Read** the test file(s) in the project's test directory (wherever tests live — `tests/`, `src/**/__tests__/`, `*.test.*` colocated, etc.)
 2. **Extract** all test names and describe blocks
 3. **Update/create** the corresponding `.specs/test-suites/` doc
 4. **Assign** sequential test IDs if missing
@@ -26,8 +26,8 @@ For the specified test file (or all if none specified):
 ```markdown
 # Test Suite: [Component]
 
-**Test File**: `tests/frontend/...`
-**Component**: `components/...`
+**Test File**: `{path to test file}`
+**Component**: `{path to component/module under test}`
 **Last Updated**: YYYY-MM-DD
 
 ## Coverage Summary

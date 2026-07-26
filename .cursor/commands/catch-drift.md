@@ -34,10 +34,18 @@ For each Gherkin scenario in the spec:
 - Verify the behavior matches
 - Check if test exists and passes
 
+If the spec has a `### Program Design` section, also compare it structurally:
+- File list vs files that actually exist / were actually touched
+- Key signatures vs actual function signatures
+- Call stack vs actual call paths
+
+The spec doubles as documentation of the code's shape, so a stale Program Design misleads every future agent that loads it as context.
+
 Report:
 - **Matched**: Spec, code, and tests all agree ✅
 - **Spec Drift**: Code does something different than spec says ⚠️
 - **Code Drift**: Code does extra things not in spec ⚠️
+- **Structural Drift**: Program Design (files/signatures/call stack) doesn't match the actual code 🏗️
 - **Missing Test**: Behavior exists but no test covers it ❓
 - **Broken Test**: Test fails (code or spec is wrong) 🚩
 
@@ -77,6 +85,7 @@ After reconciliation:
 | ✅ Matched | 8 |
 | ⚠️ Spec Drift | 2 |
 | ⚠️ Code Drift | 1 |
+| 🏗️ Structural Drift | 1 |
 | ❓ Missing Test | 1 |
 | 🚩 Broken Test | 0 |
 
@@ -120,6 +129,20 @@ After reconciliation:
 
 **Impact**: New feature not documented
 **Suggestion**: Add scenario to spec
+
+---
+
+### 🏗️ Structural Drift (Program Design doesn't match code)
+
+#### 1. CSV logic location
+**Program Design says**:
+> `buildCsv(rows: Deal[]): string` in `src/services/csv.ts`
+
+**Code has** (`src/api/export.ts:34`):
+> CSV building inlined in the route handler; `src/services/csv.ts` doesn't exist
+
+**Impact**: Spec-as-documentation is wrong — future agents will look for a service that isn't there
+**Suggestion**: Update Program Design to reality (or extract the service if the inline version is the slop)
 
 ---
 

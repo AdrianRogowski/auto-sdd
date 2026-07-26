@@ -432,9 +432,10 @@ Instructions:
 1. Read the spec file and all its Gherkin scenarios
 2. Read each source file
 3. Compare: does the code implement what the spec describes?
-4. If drift found: update specs, code, or tests as needed (prefer updating specs to match code)
-5. Run the test suite (\`$TEST_CMD\`) and fix any failures — iterate until tests pass
-6. Commit all fixes with message: 'fix: reconcile spec drift for {feature}'
+4. Structural check: if the spec has a '### Program Design' section, compare its file list, key signatures, and call stack against the actual code — update the section to describe reality if it diverged
+5. If drift found: update specs, code, or tests as needed (prefer updating specs to match code)
+6. Run the test suite (\`$TEST_CMD\`) and fix any failures — iterate until tests pass
+7. Commit all fixes with message: 'fix: reconcile spec drift for {feature}'
 
 IMPORTANT: Your goal is spec+code alignment AND a passing test suite. Keep iterating until both are achieved.
 
@@ -656,8 +657,8 @@ The spec for \"$FEATURE_FOR_IMPL\" exists at $SPEC_FILE_FOR_IMPL. Implement it t
 
 1. Read the spec file and all its Gherkin scenarios
 2. Write failing tests covering ALL scenarios (RED)
-3. Implement until all tests pass (GREEN)
-4. Self-check drift: re-read spec, compare to code, fix obvious mismatches (Layer 1)
+3. Implement until all tests pass (GREEN). If the spec has an '### Implementation Slices' section, implement ONE slice at a time — verify each slice (its tests, plus curl/browser where stated) and commit it before starting the next. Never plan your own work as horizontal layers (all migrations, then all services, then all API, then all frontend). Follow the spec's '### Program Design' (files, signatures, call stack); if reality forces a deviation, update that section to describe what you actually built. Intermediate slices may serve mock data as scaffolding, but the final slice must wire everything real — the no-mock-data rule below applies to the finished feature
+4. Self-check drift: re-read spec, compare to code — including '### Program Design' vs actual structure — fix obvious mismatches (Layer 1)
 5. Regenerate mapping: run ./scripts/generate-mapping.sh
 6. Commit all changes with message: feat: $FEATURE_FOR_IMPL
 

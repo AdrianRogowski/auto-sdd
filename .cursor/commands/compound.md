@@ -8,6 +8,12 @@ Extract and persist learnings from the current coding session.
 
 **Manual**: Run `/compound` standalone at the end of non-TDD sessions (debugging, prototyping, refactoring) to capture learnings.
 
+## When NOT to Compound
+
+- If the session was just reading/exploring (no implementation)
+- If no new learnings or failure signals were discovered
+- If learnings are already documented
+
 ## Instructions
 
 1. **Reflect** on what was accomplished this session

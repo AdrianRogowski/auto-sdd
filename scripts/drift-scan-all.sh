@@ -378,9 +378,10 @@ Instructions:
 3. Compare: does the code implement what the spec describes?
 4. Check: are there behaviors in code not covered by the spec?
 5. Check: are there scenarios in the spec not implemented in code?
-6. If drift found: update specs, code, or tests as needed (prefer updating specs to match code)
-7. If a test command is available, run it and fix any failures — iterate until tests pass
-8. Commit all fixes with message: 'fix: reconcile spec drift for $short_name'
+6. Structural check: if the spec has a '### Program Design' section, compare its file list, key signatures, and call stack against the actual code — update the section to describe reality if it diverged
+7. If drift found: update specs, code, or tests as needed (prefer updating specs to match code)
+8. If a test command is available, run it and fix any failures — iterate until tests pass
+9. Commit all fixes with message: 'fix: reconcile spec drift for $short_name'
 
 IMPORTANT: Your goal is spec+code alignment AND a passing test suite. Keep iterating until both are achieved.
 
@@ -404,6 +405,7 @@ Instructions:
    - Scenarios in spec not implemented in code
    - Behaviors in code not covered by spec
    - API/prop/type differences between spec and code
+   - '### Program Design' (files, signatures, call stack) not matching the actual code layout
 5. Do NOT modify any files
 
 Output EXACTLY ONE of these signals at the end:

@@ -21,7 +21,7 @@ Analyze an existing web application and create a build plan (vision + roadmap).
 
 ## Step 1: Discovery
 
-Use web browsing capabilities to explore the app:
+Use the browser MCP to explore the app:
 
 ```
 1. Navigate to the URL
@@ -44,6 +44,21 @@ Use web browsing capabilities to explore the app:
 - [ ] Create/edit forms
 - [ ] Settings/profile
 - [ ] Any unique features
+
+### Browser Navigation Pattern
+
+```
+CallMcpTool("cursor-browser-extension", "browser_navigate", {
+  url: "<target-url>"
+})
+
+CallMcpTool("cursor-browser-extension", "browser_snapshot", {})
+
+// Navigate to different areas
+CallMcpTool("cursor-browser-extension", "browser_click", {
+  selector: "<button or link>"
+})
+```
 
 ---
 
@@ -165,9 +180,21 @@ Update `.specs/roadmap.md` with the feature list:
 
 ### Jira Integration (Optional)
 
-If Jira is configured:
-- Create a Story for each feature
-- Update roadmap with Jira ticket key
+If `CREATE_JIRA_FOR_ROADMAP=true` in `.env.local`:
+
+For each feature, create a Jira ticket:
+
+```
+CallMcpTool("user-atlassian", "createJiraIssue", {
+  cloudId: "[from .env.local or getAccessibleAtlassianResources]",
+  projectKey: "[JIRA_PROJECT_KEY from .env.local]",
+  issueTypeName: "Story",
+  summary: "[Feature name]",
+  description: "Source: /clone-app\nPhase: [phase]\nDependencies: [deps]"
+})
+```
+
+Update roadmap with Jira ticket key.
 
 ---
 

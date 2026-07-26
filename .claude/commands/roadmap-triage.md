@@ -45,7 +45,16 @@ CREATE_JIRA_FOR_SLACK=true
 
 ## Step 2: Scan Slack
 
-Search for feature requests in the configured channel.
+Search for feature requests in the configured channel:
+
+```
+CallMcpTool("user-slack", "conversations_search_messages", {
+  filter_in_channel: "[SLACK_FEATURE_CHANNEL]",
+  filter_date_after: "[LOOKBACK_DAYS ago]",
+  search_query: "[SLACK_SEARCH_KEYWORDS]",
+  limit: 20
+})
+```
 
 ### Filter Slack Results
 
@@ -71,9 +80,14 @@ For each valid message:
 
 ## Step 3: Scan Jira
 
-Search for auto-approved tickets using JQL:
+Search for auto-approved tickets:
+
 ```
-project = [PROJECT_KEY] AND labels = '[AUTO_LABEL]' AND status = 'To Do'
+CallMcpTool("user-atlassian", "searchJiraIssuesUsingJql", {
+  cloudId: "[JIRA_CLOUD_ID]",
+  jql: "project = [PROJECT_KEY] AND labels = '[AUTO_LABEL]' AND status = 'To Do'",
+  fields: ["summary", "description", "key", "created"]
+})
 ```
 
 ### Filter Jira Results
@@ -137,9 +151,18 @@ Default to `-` (no deps) if unclear.
 ## Step 5: Create Jira Tickets (for Slack items)
 
 If `CREATE_JIRA_FOR_SLACK=true` and item came from Slack:
-- Create a Story in Jira with the feature summary
-- Include original Slack message in description
-- Update roadmap entry with new Jira key
+
+```
+CallMcpTool("user-atlassian", "createJiraIssue", {
+  cloudId: "[JIRA_CLOUD_ID]",
+  projectKey: "[JIRA_PROJECT_KEY]",
+  issueTypeName: "Story",
+  summary: "[feature summary]",
+  description: "**Source**: Slack message from @[requester]\n**Channel**: [channel]\n**Date**: [date]\n\n---\n\n[original message content]"
+})
+```
+
+Update roadmap entry with new Jira key.
 
 ---
 
@@ -147,11 +170,27 @@ If `CREATE_JIRA_FOR_SLACK=true` and item came from Slack:
 
 ### Slack
 
-Reply to the message thread confirming it was added to roadmap.
+Reply to the message thread:
+
+```
+CallMcpTool("user-slack", "conversations_add_message", {
+  channel_id: "[CHANNEL_ID]",
+  thread_ts: "[MESSAGE_TS]",
+  payload: "👀 Added to roadmap!\n\nTicket: [JIRA_KEY]\nRoadmap item: #[FEATURE_NUMBER]\n\nThis will be picked up by automation or you can track progress in Jira."
+})
+```
 
 ### Jira
 
-Add a comment noting it was added to roadmap.
+Add a comment:
+
+```
+CallMcpTool("user-atlassian", "addCommentToJiraIssue", {
+  cloudId: "[JIRA_CLOUD_ID]",
+  issueIdOrKey: "[JIRA_KEY]",
+  commentBody: "👀 Added to roadmap!\n\nRoadmap item: #[FEATURE_NUMBER]\n\nThis will be picked up by /build-next automation."
+})
+```
 
 ---
 
@@ -198,6 +237,8 @@ Added to roadmap:
 | 100 | Export to CSV | slack | PROJ-200 |
 | 101 | Dark mode | slack | PROJ-201 |
 | 102 | API rate limiting | jira | PROJ-150 |
+| 103 | Mobile nav fix | jira | PROJ-151 |
+| 104 | Bulk delete | slack | PROJ-202 |
 
 Roadmap now has 23 total features (18 planned + 5 ad-hoc)
 
@@ -211,11 +252,15 @@ Run /build-next to start building!
 This command is called by `overnight-autonomous.sh` before `/build-next`:
 
 ```bash
-# Step 1: Triage new requests
-/roadmap-triage
+# In overnight-autonomous.sh:
 
-# Step 2: Build from roadmap  
-/build-next (repeat up to MAX_FEATURES)
+# Step 1: Triage new requests
+agent -p --force "/roadmap-triage"
+
+# Step 2: Build from roadmap
+for i in $(seq 1 $MAX_FEATURES); do
+  agent -p --force "/build-next"
+done
 ```
 
 ---

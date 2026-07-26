@@ -55,14 +55,19 @@ Run the full TDD cycle from an approved spec. Use this after reviewing a spec cr
 
 ### 2. GREEN — Implement Until Tests Pass
 
-1. Implement the feature incrementally, following the `## Technical Design` contract (data model, API shapes, state management)
-2. Use design tokens from `.specs/design-system/tokens.md`
-3. Read `.specs/design-system/DESIGN.md` before implementing UI
-4. Follow component patterns from `.specs/design-system/components/`
-4. Run tests frequently — loop until ALL pass
-5. **Track failure signals**: If tests fail multiple times, note the root cause mentally (bad test, bad implementation, ambiguous spec, missing mock). These feed into compound.
-6. Update spec frontmatter: `status: implemented`, add components to `components: []`
-7. Do NOT update the roadmap status — that happens after all verification passes
+**Work in vertical slices, not stack order.** If the spec has an `### Implementation Slices` section, implement one slice at a time. If it doesn't (S feature), a single pass is fine — but never plan your own work as horizontal layers (all migrations, then all services, then all API, then all frontend). A slice ends in a verifiable state; verify it before starting the next.
+
+For each slice:
+1. Implement the slice, following the `## Technical Design` contract — including `### Program Design` (files, signatures, call stack). If reality forces a deviation from Program Design, deviate, then update the section to describe what you actually built and note it as a failure signal for compound
+2. Use design tokens from `.specs/design-system/tokens.md`; read `.specs/design-system/DESIGN.md` before implementing UI; follow component patterns from `.specs/design-system/components/`
+3. Run the slice's tests, and verify the slice live where the spec says how (curl the endpoint, load the page). Don't move on with a broken slice
+4. Commit the slice: `feat: {feature} — slice {n}: {slice name}` (keeps diffs review-sized and gives the loop rollback points)
+
+After all slices:
+5. Run the FULL test suite — loop until ALL pass
+6. **Track failure signals**: If tests fail multiple times, note the root cause mentally (bad test, bad implementation, ambiguous spec, missing mock). These feed into compound.
+7. Update spec frontmatter: `status: implemented`, add components to `components: []`
+8. Do NOT update the roadmap status — that happens after all verification passes
 
 ### 3. Migration Verify (only if the schema changed)
 
@@ -85,9 +90,10 @@ Re-read your Gherkin scenarios and compare to what you just implemented:
 1. For each scenario, verify the code implements it
 2. Check for behaviors in code not described in the spec
 3. Check for scenarios in the spec you didn't implement
-4. **If drift found**: fix the code to match the spec, or update the spec to document reality
-5. **Track drift as a failure signal**: Note what drifted and why — this feeds into compound
-6. Ensure tests still pass after any changes
+4. **Structural check**: compare `### Program Design` (file list, signatures, call stack) to the actual code — the spec is documentation, so it must describe the code as it exists. Update it if they diverged
+5. **If drift found**: fix the code to match the spec, or update the spec to document reality
+6. **Track drift as a failure signal**: Note what drifted and why — this feeds into compound
+7. Ensure tests still pass after any changes
 
 ### 5. REFACTOR — Clean Up
 
@@ -106,7 +112,8 @@ Re-verify spec↔code alignment after refactoring:
 1. Re-read the Gherkin scenarios
 2. Verify the refactored code still implements every scenario
 3. Check that refactoring didn't subtly change behavior (e.g., error handling, validation)
-4. **If drift found**: fix it, ensure tests pass
+4. Refactoring moves code around — re-sync `### Program Design` (files, signatures, call stack) with the refactored layout
+5. **If drift found**: fix it, ensure tests pass
 
 ### 7. Compound — Extract Learnings (Automatic)
 
