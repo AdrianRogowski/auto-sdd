@@ -234,6 +234,12 @@ warn() { echo "[$(date '+%H:%M:%S')] ⚠ $1"; }
 fail() { echo "[$(date '+%H:%M:%S')] ✗ $1"; }
 trim() { sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
 
+# Git-safe slug for branch/worktree names. Feature titles often contain
+# backticks, parens, arrows, asterisks — git check-ref-format rejects those.
+feature_slug() {
+    echo "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g' | cut -c1-80
+}
+
 format_duration() {
     local total_seconds=$1
     local hours=$((total_seconds / 3600))
@@ -2090,7 +2096,7 @@ merge_and_verify_feature() {
 rebuild_feature_on_integration() {
     local feature="$1"
     local safe_name
-    safe_name=$(echo "$feature" | tr ' :/' '-' | tr '[:upper:]' '[:lower:]')
+    safe_name=$(feature_slug "$feature")
     local worktree_name="rebuild-${safe_name}-$(date +%H%M%S)-$$"
     local worktree_path="$PROJECT_DIR/.build-worktrees/$worktree_name"
     local branch_name="auto/rebuild-${safe_name}"
@@ -2189,7 +2195,13 @@ run_parallel_loop() {
         for i in $(seq 0 $((batch_size - 1))); do
             local feature="${BATCH_FEATURES[$i]}"
             local safe_name
-            safe_name=$(echo "$feature" | tr ' :/' '-' | tr '[:upper:]' '[:lower:]')
+            safe_name=$(feature_slug "$feature")
+            if [ -z "$safe_name" ]; then
+                fail "Could not slugify feature name for worktree: $feature"
+                LOOP_FAILED=$((LOOP_FAILED + 1))
+                LOOP_TIMINGS+=("✗ $feature: invalid feature name for branch")
+                continue
+            fi
             local worktree_name="parallel-${safe_name}-$(date +%H%M%S)-$$-$i"
             local worktree_path="$PROJECT_DIR/.build-worktrees/$worktree_name"
             local branch_name="auto/parallel-${safe_name}"
@@ -2199,13 +2211,17 @@ run_parallel_loop() {
             mkdir -p "$(dirname "$worktree_path")"
             git branch -D "$branch_name" 2>/dev/null || true
 
-            if ! git worktree add -b "$branch_name" "$worktree_path" "$MAIN_BRANCH" 2>/dev/null; then
+            local worktree_err
+            worktree_err=$(mktemp)
+            if ! git worktree add -b "$branch_name" "$worktree_path" "$MAIN_BRANCH" 2>"$worktree_err"; then
                 fail "Failed to create worktree for: $feature"
+                warn "$(cat "$worktree_err")"
                 LOOP_FAILED=$((LOOP_FAILED + 1))
                 LOOP_TIMINGS+=("✗ $feature: worktree creation failed")
-                rm -f "$result_file"
+                rm -f "$result_file" "$worktree_err"
                 continue
             fi
+            rm -f "$worktree_err"
 
             success "Started: $feature (worktree: $worktree_name)"
 
@@ -2445,9 +2461,9 @@ if [ "$BRANCH_STRATEGY" = "both" ]; then
             echo ""
 
             # Create a worktree from main for this feature
-            worktree_name="independent-$(echo "$fn" | tr ' :/' '-' | tr '[:upper:]' '[:lower:]')-$(date +%H%M%S)"
+            worktree_name="independent-$(feature_slug "$fn")-$(date +%H%M%S)"
             worktree_path="$PROJECT_DIR/.build-worktrees/$worktree_name"
-            branch_name="auto/independent-$(echo "$fn" | tr ' :/' '-' | tr '[:upper:]' '[:lower:]')"
+            branch_name="auto/independent-$(feature_slug "$fn")"
 
             mkdir -p "$(dirname "$worktree_path")"
 
@@ -2559,7 +2575,7 @@ SPEC_FAILED: {reason}
         echo ""
         echo "  Independent branches (isolated per feature):"
         for fn in "${CHAINED_FEATURE_NAMES[@]}"; do
-            branch_name="auto/independent-$(echo "$fn" | tr ' :/' '-' | tr '[:upper:]' '[:lower:]')"
+            branch_name="auto/independent-$(feature_slug "$fn")"
             if git rev-parse --verify "$branch_name" >/dev/null 2>&1; then
                 echo "    $branch_name"
             fi

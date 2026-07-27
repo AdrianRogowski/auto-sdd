@@ -2,6 +2,14 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.12.2 — Parallel Worktree Names Survive Real Feature Titles
+
+Parallel/independent/rebuild modes built git branch names with a thin `tr` that only swapped spaces, `:`, and `/`. Feature titles with backticks, parentheses, arrows, or `*` (common in roadmap rows) produced refs that `git check-ref-format` rejects, so the worktree create failed immediately and the feature was skipped for the rest of the run — starving anything that depended on it.
+
+### Fixed
+- **`build-loop-local.sh`** — new `feature_slug` helper (alphanumeric slug, max 80 chars) used for parallel, rebuild, and independent branch/worktree names.
+- **Worktree create errors surface** — stderr from `git worktree add` is logged instead of being discarded, so the next invalid-name failure is obvious.
+
 ## 2.12.1 — Roadmap Status Marking Survives Real Feature Names
 
 `mark_roadmap_status` — the function that flips a roadmap row to ✅/⏸️ after the merge gate — escaped feature names for ERE (`sed -E`) but fed the same string to plain BRE `grep`, where `\(` means "group" instead of "literal paren". Any feature name containing `(`, `+`, or `/` (in practice: most of them) failed the existence check and the status update was silently skipped, so parallel-mode roadmaps only stayed correct when the compound agent happened to fix them up. Names with `/` additionally broke sed's address delimiter.
