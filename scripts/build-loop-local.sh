@@ -1218,18 +1218,52 @@ mark_roadmap_status() {
         return 0
     fi
 
-    local escaped_name
-    escaped_name=$(echo "$feature_name" | sed 's/[.[\*^$()+?{|\\]/\\&/g')
-
-    if grep -q "$escaped_name" "$roadmap_file" 2>/dev/null; then
-        # Replace status emoji on the line containing this feature name
-        # Handles: ⬜ 🔄 ✅ ⏸️ ❌
-        sed -i.bak -E "/$escaped_name/s/⬜|🔄|✅|⏸️|❌/$status_emoji/g" "$roadmap_file"
-        rm -f "$roadmap_file.bak"
-        log "Roadmap: $feature_name → $status_emoji"
-    else
+    # Literal substring match (grep -F / awk index) — feature names contain
+    # regex metacharacters like ( ) + / that broke the old grep/sed approach.
+    if ! grep -qF -- "$feature_name" "$roadmap_file" 2>/dev/null; then
         warn "Feature '$feature_name' not found in roadmap — skipping status update"
+        return 0
     fi
+
+    local tmp="${roadmap_file}.tmp.$$"
+
+    # Flip the status emoji on the feature's table row only
+    RALPH_FEATURE_NAME="$feature_name" RALPH_STATUS_EMOJI="$status_emoji" awk '
+        BEGIN {
+            name  = ENVIRON["RALPH_FEATURE_NAME"]
+            emoji = ENVIRON["RALPH_STATUS_EMOJI"]
+        }
+        /^\|/ && index($0, name) { gsub(/⬜|🔄|✅|⏸️|❌/, emoji) }
+        { print }
+    ' "$roadmap_file" > "$tmp" && mv "$tmp" "$roadmap_file"
+
+    # Recalculate the Progress summary from actual feature rows (| N | ... |),
+    # so the counts stay correct even when the compound agent does not run.
+    awk '
+        NR == FNR {
+            if ($0 ~ /^\|[[:space:]]*[0-9]+[[:space:]]*\|/) {
+                if      (index($0, "✅")) done++
+                else if (index($0, "🔄")) prog++
+                else if (index($0, "⏸"))  blocked++
+                else if (index($0, "❌")) cancelled++
+                else if (index($0, "⬜")) pending++
+            }
+            next
+        }
+        # Summary rows: | <emoji> <label> | <count> |
+        /^\|[[:space:]]*✅/ && /\|[[:space:]]*[0-9]+[[:space:]]*\|[[:space:]]*$/ { sub(/\|[[:space:]]*[0-9]+[[:space:]]*\|[[:space:]]*$/, "| " done+0 " |") }
+        /^\|[[:space:]]*🔄/ && /\|[[:space:]]*[0-9]+[[:space:]]*\|[[:space:]]*$/ { sub(/\|[[:space:]]*[0-9]+[[:space:]]*\|[[:space:]]*$/, "| " prog+0 " |") }
+        /^\|[[:space:]]*⬜/ && /\|[[:space:]]*[0-9]+[[:space:]]*\|[[:space:]]*$/ { sub(/\|[[:space:]]*[0-9]+[[:space:]]*\|[[:space:]]*$/, "| " pending+0 " |") }
+        /^\|[[:space:]]*⏸/ && /\|[[:space:]]*[0-9]+[[:space:]]*\|[[:space:]]*$/ { sub(/\|[[:space:]]*[0-9]+[[:space:]]*\|[[:space:]]*$/, "| " blocked+0 " |") }
+        /^\|[[:space:]]*❌/ && /\|[[:space:]]*[0-9]+[[:space:]]*\|[[:space:]]*$/ { sub(/\|[[:space:]]*[0-9]+[[:space:]]*\|[[:space:]]*$/, "| " cancelled+0 " |") }
+        { print }
+    ' "$roadmap_file" "$roadmap_file" > "$tmp" && mv "$tmp" "$roadmap_file"
+
+    # Keep the Last updated stamp honest
+    sed -i.bak -E "s/^\*\*Last updated\*\*:.*/**Last updated**: $(date '+%Y-%m-%d')/" "$roadmap_file"
+    rm -f "$roadmap_file.bak"
+
+    log "Roadmap: $feature_name → $status_emoji"
 }
 
 # ── Build loop function ──────────────────────────────────────────────────

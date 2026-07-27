@@ -2,6 +2,15 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.12.1 — Roadmap Status Marking Survives Real Feature Names
+
+`mark_roadmap_status` — the function that flips a roadmap row to ✅/⏸️ after the merge gate — escaped feature names for ERE (`sed -E`) but fed the same string to plain BRE `grep`, where `\(` means "group" instead of "literal paren". Any feature name containing `(`, `+`, or `/` (in practice: most of them) failed the existence check and the status update was silently skipped, so parallel-mode roadmaps only stayed correct when the compound agent happened to fix them up. Names with `/` additionally broke sed's address delimiter.
+
+### Fixed
+- **`build-loop-local.sh` / `overnight-autonomous.sh`** — `mark_roadmap_status` now matches feature names literally (`grep -F` + awk `index()`), so no name can break it, and only rewrites table rows rather than any line mentioning the feature.
+- **Progress summary self-heals** — `build-loop-local.sh` recalculates the summary counts (✅/🔄/⬜/⏸️/❌) from the actual feature rows and refreshes the `Last updated` stamp on every status change, so the roadmap header stays correct even when the compound agent does not run (crashed loop, `COMPOUND=false`, drift-revert paths).
+- **Silent skip now warns** — `overnight-autonomous.sh` logged nothing when a feature name was not found; it now emits the same warning as the build loop.
+
 ## 2.12.0 — Clearer Gherkin (STE) and Dense ASCII Mockups
 
 Weaker models copy the density of the `/spec-first` example. Thin mockups and vague Gherkin ("seamless", "intuitive") produce thin, untestable specs. This release raises the exemplar and constrains scenario language so `/tdd` gets observable acceptance criteria.

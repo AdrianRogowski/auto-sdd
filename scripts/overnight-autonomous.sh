@@ -256,13 +256,22 @@ mark_roadmap_status() {
     local status_emoji="$2"
     local roadmap_file="$PROJECT_DIR/.specs/roadmap.md"
     if [ ! -f "$roadmap_file" ]; then return 0; fi
-    local escaped_name
-    escaped_name=$(echo "$feature_name" | sed 's/[.[\*^$()+?{|\\]/\\&/g')
-    if grep -q "$escaped_name" "$roadmap_file" 2>/dev/null; then
-        sed -i.bak -E "/$escaped_name/s/⬜|🔄|✅|⏸️|❌/$status_emoji/g" "$roadmap_file"
-        rm -f "$roadmap_file.bak"
-        log "Roadmap: $feature_name → $status_emoji"
+    # Literal substring match — feature names contain regex metacharacters
+    # like ( ) + / that broke the old grep/sed approach.
+    if ! grep -qF -- "$feature_name" "$roadmap_file" 2>/dev/null; then
+        warn "Feature '$feature_name' not found in roadmap — skipping status update"
+        return 0
     fi
+    local tmp="${roadmap_file}.tmp.$$"
+    RALPH_FEATURE_NAME="$feature_name" RALPH_STATUS_EMOJI="$status_emoji" awk '
+        BEGIN {
+            name  = ENVIRON["RALPH_FEATURE_NAME"]
+            emoji = ENVIRON["RALPH_STATUS_EMOJI"]
+        }
+        /^\|/ && index($0, name) { gsub(/⬜|🔄|✅|⏸️|❌/, emoji) }
+        { print }
+    ' "$roadmap_file" > "$tmp" && mv "$tmp" "$roadmap_file"
+    log "Roadmap: $feature_name → $status_emoji"
 }
 
 detect_build_check() {
