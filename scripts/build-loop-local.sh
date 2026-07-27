@@ -286,6 +286,27 @@ else
     command -v agent &>/dev/null || { fail "Cursor CLI (agent) not found. Install from: https://cursor.com/cli"; exit 1; }
 fi
 
+# ── Node version pin check ────────────────────────────────────────────────
+# A wrong Node in PATH makes every worktree "test failure" an environment
+# failure (e.g. ERR_REQUIRE_ESM on old Node). Fail fast before spending hours.
+if [ -f "$PROJECT_DIR/.nvmrc" ] && command -v node &>/dev/null; then
+    NVMRC_WANT=$(tr -d 'v[:space:]' < "$PROJECT_DIR/.nvmrc")
+    NODE_HAVE=$(node -v 2>/dev/null | sed 's/^v//')
+    # Only enforce numeric pins (skip aliases like lts/iron)
+    case "$NVMRC_WANT" in
+        ''|*[!0-9.]*) : ;;
+        *)
+            case "$NODE_HAVE" in
+                "$NVMRC_WANT"|"$NVMRC_WANT".*) : ;;
+                *)
+                    fail "Node $NODE_HAVE is active but .nvmrc pins $NVMRC_WANT — run 'nvm use' (or fix PATH) before starting the loop"
+                    exit 1
+                    ;;
+            esac
+            ;;
+    esac
+fi
+
 # ── Auto-detect build check command ──────────────────────────────────────
 
 detect_build_check() {
@@ -518,6 +539,18 @@ check_tests() {
     local exit_code=${PIPESTATUS[0]}
     if [ $exit_code -eq 0 ]; then
         success "Tests passed"
+        # Surface skip counts: a green suite where half the tests skipped is a
+        # quality signal the summary line otherwise hides.
+        local skipped skipped_n
+        skipped=$(grep -Eo '[0-9]+ skipped' "$tmpfile" | tail -1)
+        if [ -n "$skipped" ]; then
+            skipped_n=$(echo "$skipped" | grep -Eo '^[0-9]+')
+            if [ "${skipped_n:-0}" -ge 10 ]; then
+                warn "Test suite passed with $skipped — verify skips are dependency-gated, not silenced failures"
+            else
+                log "Note: $skipped in this run"
+            fi
+        fi
         LAST_TEST_OUTPUT=""
     else
         LAST_TEST_OUTPUT=$(tail -80 "$tmpfile")
@@ -525,6 +558,21 @@ check_tests() {
     fi
     rm -f "$tmpfile"
     return $exit_code
+}
+
+# Build + test in the current directory. Sets VERIFY_DETAIL on failure so
+# callers can report WHICH gate failed (used by the verify-first retry ladder).
+verify_feature_checks() {
+    VERIFY_DETAIL=""
+    if [ -n "$BUILD_CMD" ] && ! check_build; then
+        VERIFY_DETAIL="build check failed"
+        return 1
+    fi
+    if [ -n "$TEST_CMD" ] && ! check_tests; then
+        VERIFY_DETAIL="tests failed"
+        return 1
+    fi
+    return 0
 }
 
 check_lint() {
@@ -1031,6 +1079,11 @@ CRITICAL IMPLEMENTATION RULES (from roadmap):
 - NO placeholder UI. Components must be wired to real data sources.
 - Features must work end-to-end with real user data or they are not done.
 - Real validation, real error handling, real flows.
+- TESTS AND EXTERNAL DEPENDENCIES: a test that needs a live database, network,
+  API key, or optional tooling must conditionally SKIP when that dependency is
+  absent (it.skipIf / pytest.mark.skipif / t.Skip) and still run fully when it
+  is present. Never throw \"set DATABASE_URL first\" from a test — the suite
+  runs in worktrees and CI where secrets may not be exported.
 $infra_hint
 Before outputting your final signals, write a session summary between these exact markers:
 SESSION_SUMMARY_START
@@ -1051,6 +1104,42 @@ BUILD_FAILED: {reason}
 
 The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported.
 They are used by the automated refactor, drift-check, and compound phases that run after your build.
+"
+}
+
+# Targeted fix prompt for the verify-first retry ladder: the implementation is
+# committed and the spec is good — only the verification gate failed. Cheaper
+# and less destructive than a full spec+implement retry.
+verify_fix_prompt() {
+    local feature_name="$1"
+    local spec_file="$2"
+
+    echo "
+The feature \"$feature_name\" (spec: $spec_file) is fully implemented and committed,
+but the verification gate failed. Your ONLY job is to fix the root cause of the
+failure below with the smallest correct change. Do NOT re-plan or re-architect.
+
+Build check output (empty means the build check passed):
+${LAST_BUILD_OUTPUT:-<build check passed>}
+
+Test output (empty means tests passed):
+${LAST_TEST_OUTPUT:-<tests passed>}
+
+Rules:
+1. Fix the ROOT CAUSE. Do NOT weaken assertions, delete tests, or mark tests
+   as todo/skip just to go green.
+2. Exception: if a test hard-fails because a live database, network, API key,
+   or optional tooling is absent in this environment, convert it to a
+   conditional skip (it.skipIf / pytest.mark.skipif) that still runs fully
+   when the dependency IS present.
+3. If the failure is a missing package, install it properly (so the manifest
+   and lockfile are updated) — do not vendor or stub it.
+4. Verify locally before finishing: run ${BUILD_CMD:-'(no build check)'} and ${TEST_CMD:-'(no test check)'}.
+5. Commit the fix: fix: $feature_name — verification
+
+After completion, output EXACTLY ONE of:
+FIX_COMPLETE: {one-line description of the root cause and fix}
+FIX_FAILED: {why the failure cannot be fixed here}
 "
 }
 
@@ -1629,6 +1718,41 @@ parse_ready_features() {
     echo "${ready_features#|}"
 }
 
+# Preflight a fresh worktree before handing it to an agent. A worktree where
+# the test runner cannot resolve turns every later "test failure" into an
+# environment failure that wastes a full agent cycle. Auto-heals by installing
+# dependencies; only fails when the runner is genuinely unavailable.
+preflight_worktree() {
+    local wt="$1"
+    [ -f "$wt/package.json" ] || return 0
+    [ -n "$TEST_CMD" ] || return 0
+    command -v node &>/dev/null || return 0
+
+    # First token of the package.json test script (vitest, jest, tsx, ...)
+    local runner
+    runner=$(node -e 'const s=(require(process.argv[1]).scripts||{}).test||"";process.stdout.write(s.trim().split(/\s+/)[0]||"")' "$wt/package.json" 2>/dev/null)
+    case "$runner" in
+        ""|node|npm|npx|echo|exit|true) return 0 ;;
+    esac
+
+    if (cd "$wt" && node -e "require.resolve('$runner/package.json')" >/dev/null 2>&1); then
+        return 0
+    fi
+
+    warn "Preflight: test runner '$runner' does not resolve from $(basename "$wt") — installing dependencies"
+    if [ -f "$wt/pnpm-lock.yaml" ] && command -v pnpm &>/dev/null; then
+        (cd "$wt" && pnpm install --prefer-offline >/dev/null 2>&1) || true
+    else
+        (cd "$wt" && npm install --no-audit --no-fund >/dev/null 2>&1) || true
+    fi
+
+    if (cd "$wt" && node -e "require.resolve('$runner/package.json')" >/dev/null 2>&1); then
+        return 0
+    fi
+    fail "Preflight failed: test runner '$runner' unresolvable in worktree even after install"
+    return 1
+}
+
 build_feature_in_worktree() {
     local feature_name="$1"
     local worktree_path="$2"
@@ -1653,6 +1777,8 @@ SPEC_FAILED: {reason}
 "
 
     local attempt=0
+    local fail_phase="spec"
+    local fail_detail=""
     while [ "$attempt" -le "$MAX_RETRIES" ]; do
         if [ "$attempt" -gt 0 ]; then
             log "[parallel:$feature_name] Retry $attempt/$MAX_RETRIES"
@@ -1668,6 +1794,8 @@ SPEC_FAILED: {reason}
         spec_result=$(cat "$build_output")
 
         if ! echo "$spec_result" | grep -q "FEATURE_SPEC_READY"; then
+            fail_phase="spec"
+            fail_detail=$(echo "$spec_result" | grep "^SPEC_FAILED:" | tail -1 | cut -d: -f2- | trim)
             rm -f "$build_output"
             attempt=$((attempt + 1))
             continue
@@ -1684,6 +1812,8 @@ SPEC_FAILED: {reason}
         rm -f "$build_output"
 
         if ! echo "$build_result" | grep -q "FEATURE_BUILT"; then
+            fail_phase="implement"
+            fail_detail=$(echo "$build_result" | grep "^BUILD_FAILED:" | tail -1 | cut -d: -f2- | trim)
             attempt=$((attempt + 1))
             continue
         fi
@@ -1692,18 +1822,39 @@ SPEC_FAILED: {reason}
         source_files=$(echo "$build_result" | grep "^SOURCE_FILES:" | tail -1 | cut -d: -f2- | trim)
         spec_file=$(echo "$build_result" | grep "^SPEC_FILE:" | tail -1 | cut -d: -f2- | trim)
 
-        # Pre-merge verification: build + tests must pass in the worktree
+        # Pre-merge verification with a verify-first retry ladder. The spec and
+        # implementation are committed, so a verify failure should NOT restart
+        # from Phase 1: (a) re-run the checks once (flaky failure), then
+        # (b) targeted fix agent with the failing output, then (c) only fall
+        # back to a full spec+implement retry.
         local phase_ok=true
         if ! check_working_tree_clean; then
             warn "[parallel:$feature_name] Agent left uncommitted changes"
+            fail_phase="verify"
+            fail_detail="agent left uncommitted changes"
             phase_ok=false
-        elif [ -n "$BUILD_CMD" ] && ! check_build; then
-            warn "[parallel:$feature_name] Build check failed in worktree"
-            phase_ok=false
-        fi
-        if [ "$phase_ok" = true ] && [ -n "$TEST_CMD" ] && ! check_tests; then
-            warn "[parallel:$feature_name] Tests failed in worktree"
-            phase_ok=false
+        elif ! verify_feature_checks; then
+            warn "[parallel:$feature_name] Verify failed ($VERIFY_DETAIL) — re-running checks once"
+            if verify_feature_checks; then
+                log "[parallel:$feature_name] Checks passed on re-run (flaky failure)"
+            else
+                log "[parallel:$feature_name] Fix agent for: $VERIFY_DETAIL"
+                run_agent "$RETRY_MODEL" "$(verify_fix_prompt "$feature_name" "$spec_file")" 2>/dev/null || true
+                # The fix agent commits its own work; commit leftovers so the
+                # tree is clean for verification either way.
+                if ! check_working_tree_clean; then
+                    git add -A 2>/dev/null || true
+                    git commit -m "fix: $feature_name — verification" >/dev/null 2>&1 || true
+                fi
+                if verify_feature_checks; then
+                    log "[parallel:$feature_name] Fix agent resolved the verify failure"
+                else
+                    warn "[parallel:$feature_name] Verify still failing after fix agent ($VERIFY_DETAIL)"
+                    fail_phase="verify"
+                    fail_detail="$VERIFY_DETAIL"
+                    phase_ok=false
+                fi
+            fi
         fi
 
         if [ "$phase_ok" != true ]; then
@@ -1727,7 +1878,7 @@ SPEC_FAILED: {reason}
         return 0
     done
 
-    echo "FAILED|$feature_name|$branch_name||" > "$result_file"
+    echo "FAILED|$feature_name|$branch_name|$fail_phase|$fail_detail" > "$result_file"
     return 1
 }
 
@@ -1816,6 +1967,35 @@ regenerate_lockfile() {
         npm install --package-lock-only >/dev/null 2>&1 && git add package-lock.json 2>/dev/null || warn "npm lockfile regeneration failed (non-blocking)"
     elif [ -f "yarn.lock" ] || [ -f "bun.lockb" ]; then
         warn "Cannot auto-regenerate yarn/bun lockfile — kept integration branch's copy"
+    fi
+}
+
+# After a merge changes a dependency manifest, node_modules on the integration
+# checkout is stale — modules only the incoming feature depends on are missing,
+# and the post-merge build/test gate fails on require/import errors that have
+# nothing to do with the feature's logic. Install BEFORE verification.
+sync_dependencies_after_merge() {
+    local since_commit="$1"
+    local manifest_changed
+    manifest_changed=$(git diff --name-only "$since_commit"..HEAD 2>/dev/null | grep -E '(^|/)package(-lock)?\.json$|(^|/)pnpm-lock\.yaml$|(^|/)yarn\.lock$|(^|/)bun\.lockb$' | head -1)
+    [ -z "$manifest_changed" ] && return 0
+
+    log "Dependency manifest changed in merge ($manifest_changed) — installing before verification..."
+    if [ -f "pnpm-lock.yaml" ] && command -v pnpm &>/dev/null; then
+        pnpm install --prefer-offline >/dev/null 2>&1 || warn "pnpm install failed after merge (verification will surface the damage)"
+    elif [ -f "bun.lockb" ] && command -v bun &>/dev/null; then
+        bun install >/dev/null 2>&1 || warn "bun install failed after merge (verification will surface the damage)"
+    elif [ -f "yarn.lock" ] && command -v yarn &>/dev/null; then
+        yarn install >/dev/null 2>&1 || warn "yarn install failed after merge (verification will surface the damage)"
+    elif [ -f "package.json" ] && command -v npm &>/dev/null; then
+        npm install --no-audit --no-fund >/dev/null 2>&1 || warn "npm install failed after merge (verification will surface the damage)"
+    fi
+
+    # The install may update or create the lockfile; commit so the integration
+    # tree stays clean for the next merge (porcelain also catches untracked).
+    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+        git add -A 2>/dev/null || true
+        git commit -m "chore: sync dependencies after merge" >/dev/null 2>&1 || true
     fi
 }
 
@@ -1964,6 +2144,13 @@ mark_roadmap_status_committed() {
     fi
 }
 
+# Record a terminal failure with the phase that caught it, so the run summary
+# can group failures by gate instead of a flat "Failed: N".
+# Args: $1=phase, $2=feature, $3=detail (optional)
+record_failure() {
+    FAILURE_RECORDS+=("$1|$2|${3:-}")
+}
+
 # Handle a feature whose merge (or post-merge verification) failed.
 # on_fail="rebuild" → queue for the rebuild pass (fresh build on integrated code)
 # on_fail="block"   → mark ⏸️ and count as failed (terminal)
@@ -1982,6 +2169,12 @@ handle_merge_failure() {
         LOOP_FAILED=$((LOOP_FAILED + 1))
         mark_roadmap_status_committed "$feature" "⏸️"
         LOOP_TIMINGS+=("✗ $feature: $reason")
+        case "$reason" in
+            *conflict*)      record_failure "merge" "$feature" "$reason" ;;
+            *drift*)         record_failure "drift" "$feature" "$reason" ;;
+            *build/tests*)   record_failure "post-merge verify" "$feature" "$reason" ;;
+            *)               record_failure "merge" "$feature" "$reason" ;;
+        esac
     fi
 }
 
@@ -2040,6 +2233,10 @@ merge_and_verify_feature() {
         handle_merge_failure "$feature" "$branch" "$on_fail" "merge conflicts unresolvable"
         return 1
     fi
+
+    # Dependencies first: verification runs against installed modules, not the
+    # manifest, so a merged package.json without an install fails spuriously.
+    sync_dependencies_after_merge "$pre_merge_commit"
 
     # Post-merge verification: build + tests on integrated code
     local merge_ok=true
@@ -2115,6 +2312,14 @@ rebuild_feature_on_integration() {
         return 1
     fi
 
+    if ! preflight_worktree "$worktree_path"; then
+        fail "Rebuild worktree preflight failed for: $feature"
+        cd "$PROJECT_DIR"
+        git worktree remove --force "$worktree_path" 2>/dev/null || true
+        rm -f "$result_file"
+        return 1
+    fi
+
     log "[rebuild:$feature] Rebuilding sequentially on integrated code ($rebuild_base)"
     build_feature_in_worktree "$feature" "$worktree_path" "$branch_name" "$result_file" || true
 
@@ -2139,6 +2344,7 @@ run_parallel_loop() {
     LOOP_BUILT=0
     LOOP_FAILED=0
     LOOP_TIMINGS=()
+    FAILURE_RECORDS=()
 
     local features_attempted=0
     local batch_num=0
@@ -2200,6 +2406,7 @@ run_parallel_loop() {
                 fail "Could not slugify feature name for worktree: $feature"
                 LOOP_FAILED=$((LOOP_FAILED + 1))
                 LOOP_TIMINGS+=("✗ $feature: invalid feature name for branch")
+                record_failure "worktree" "$feature" "invalid feature name for branch"
                 continue
             fi
             local worktree_name="parallel-${safe_name}-$(date +%H%M%S)-$$-$i"
@@ -2218,10 +2425,21 @@ run_parallel_loop() {
                 warn "$(cat "$worktree_err")"
                 LOOP_FAILED=$((LOOP_FAILED + 1))
                 LOOP_TIMINGS+=("✗ $feature: worktree creation failed")
+                record_failure "worktree" "$feature" "worktree creation failed"
                 rm -f "$result_file" "$worktree_err"
                 continue
             fi
             rm -f "$worktree_err"
+
+            if ! preflight_worktree "$worktree_path"; then
+                LOOP_FAILED=$((LOOP_FAILED + 1))
+                LOOP_TIMINGS+=("✗ $feature: worktree preflight failed (test runner unresolvable)")
+                record_failure "preflight" "$feature" "test runner unresolvable in worktree"
+                cd "$PROJECT_DIR"
+                git worktree remove --force "$worktree_path" 2>/dev/null || true
+                rm -f "$result_file"
+                continue
+            fi
 
             success "Started: $feature (worktree: $worktree_name)"
 
@@ -2269,14 +2487,19 @@ run_parallel_loop() {
                     success "Completed: $feature ($(format_duration $duration))"
                     LOOP_TIMINGS+=("✓ $feature: $(format_duration $duration) (build)")
                 else
-                    fail "Failed: $feature ($(format_duration $duration))"
+                    local r_phase r_detail
+                    r_phase=$(echo "$result_line" | cut -d'|' -f4)
+                    r_detail=$(echo "$result_line" | cut -d'|' -f5)
+                    fail "Failed: $feature ($(format_duration $duration)) — ${r_phase:-worker} phase${r_detail:+: $r_detail}"
                     LOOP_FAILED=$((LOOP_FAILED + 1))
-                    LOOP_TIMINGS+=("✗ $feature: $(format_duration $duration)")
+                    LOOP_TIMINGS+=("✗ $feature: $(format_duration $duration) (${r_phase:-worker})")
+                    record_failure "${r_phase:-worker}" "$feature" "$r_detail"
                 fi
             else
                 fail "No result file for: $feature"
                 LOOP_FAILED=$((LOOP_FAILED + 1))
                 LOOP_TIMINGS+=("✗ $feature: $(format_duration $duration) (no result)")
+                record_failure "worker" "$feature" "worker produced no result (crashed?)"
             fi
             rm -f "${RESULT_FILES[$i]}"
         done
@@ -2335,6 +2558,7 @@ run_parallel_loop() {
                         LOOP_FAILED=$((LOOP_FAILED + 1))
                         mark_roadmap_status_committed "$rb_feature" "⏸️"
                         LOOP_TIMINGS+=("✗ $rb_feature: rebuild failed ($(format_duration $(($(date +%s) - rb_start))))")
+                        record_failure "rebuild" "$rb_feature" "rebuild on integrated code failed"
                     fi
                 done
             fi
@@ -2628,6 +2852,25 @@ elif [ "$BRANCH_STRATEGY" = "parallel" ]; then
         echo "  Successfully merged features:"
         for fn in "${BUILT_FEATURE_NAMES[@]}"; do
             echo "    ✓ $fn"
+        done
+        echo ""
+    fi
+    if [ ${#FAILURE_RECORDS[@]} -gt 0 ]; then
+        echo "  Failures by phase (which gate caught it):"
+        for phase in preflight worktree spec implement verify merge "post-merge verify" drift rebuild worker; do
+            for rec in "${FAILURE_RECORDS[@]}"; do
+                rec_phase="${rec%%|*}"
+                rec_rest="${rec#*|}"
+                rec_feature="${rec_rest%%|*}"
+                rec_detail="${rec_rest#*|}"
+                if [ "$rec_phase" = "$phase" ]; then
+                    if [ -n "$rec_detail" ]; then
+                        echo "    [$rec_phase] $rec_feature — $rec_detail"
+                    else
+                        echo "    [$rec_phase] $rec_feature"
+                    fi
+                fi
+            done
         done
         echo ""
     fi

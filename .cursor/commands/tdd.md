@@ -50,8 +50,9 @@ Run the full TDD cycle from an approved spec. Use this after reviewing a spec cr
 2. Read the `## Technical Design` section — use it to inform test setup (data shapes, API mocking, state management)
 3. Write tests covering every scenario: happy path, edge cases, error states, loading states
 4. Tests should **FAIL** (no implementation yet)
-5. Document tests in `.specs/test-suites/{path}.tests.md`
-6. Update spec frontmatter: `status: tested`, add test files to `tests: []`
+5. **External dependencies skip, never throw**: a test that needs a live database, network, API key, or optional tooling must conditionally skip when that dependency is absent (`it.skipIf` / `pytest.mark.skipif` / `t.Skip`) and still run fully when it is present. Never throw "set DATABASE_URL first" from a test — suites run in worktrees and CI where secrets may not be exported, and a hard throw turns an environment gap into a false test failure
+6. Document tests in `.specs/test-suites/{path}.tests.md`
+7. Update spec frontmatter: `status: tested`, add test files to `tests: []`
 
 ### 2. GREEN — Implement Until Tests Pass
 

@@ -679,6 +679,11 @@ CRITICAL IMPLEMENTATION RULES (from roadmap):
 - NO placeholder UI. Components must be wired to real data sources.
 - Features must work end-to-end with real user data or they are not done.
 - Real validation, real error handling, real flows.
+- TESTS AND EXTERNAL DEPENDENCIES: a test that needs a live database, network,
+  API key, or optional tooling must conditionally SKIP when that dependency is
+  absent (it.skipIf / pytest.mark.skipif / t.Skip) and still run fully when it
+  is present. Never throw \"set DATABASE_URL first\" from a test — the suite
+  runs in worktrees and CI where secrets may not be exported.
 
 Before outputting your final signals, write a session summary between these exact markers:
 SESSION_SUMMARY_START

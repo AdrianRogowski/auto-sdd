@@ -2,6 +2,19 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.13.0 — Environment-Sound Parallel Mode
+
+A parallel run is only as good as the environment each gate runs in. Post-mortems of real runs showed most "test failures" were environment failures wearing a test costume: merged `package.json` with no install, worktrees where the test runner didn't resolve, tests that threw on missing secrets, and a summary that reported `Failed: 4` without saying which gate caught what. This release keeps the full test suite at every gate (no scoped-verify shortcuts) and makes the environment reliable enough to deserve it.
+
+### Fixed
+- **Post-merge dependency install** (`sync_dependencies_after_merge`) — when a merge changes `package.json` or a lockfile, the integration checkout now runs a real install (pnpm/bun/yarn/npm) BEFORE build/test verification, and commits the resulting lockfile so the tree stays clean for the next merge. Previously only the lockfile was regenerated (`--package-lock-only`), so verification failed on `Cannot find module` for any dependency introduced by the incoming feature — reverting a perfectly good merge.
+
+### New
+- **Worktree preflight** (`preflight_worktree`) — before an agent is handed a fresh worktree (parallel and rebuild), the test runner from `package.json` must resolve; if it doesn't, dependencies are installed automatically, and only a still-unresolvable runner fails the feature (recorded as a `preflight` failure, not a fake test failure). Plus a startup check: if `.nvmrc` pins a numeric Node version and a different one is active, the loop refuses to start instead of failing every worktree hours later.
+- **Verify-first retry ladder** — when a worker's implementation is committed but verification fails, the loop no longer restarts from Phase 1 Spec. It (a) re-runs the checks once to absorb flaky failures, (b) dispatches a targeted fix agent (`verify_fix_prompt`) with the actual build/test output and explicit no-test-weakening rules, and only (c) falls back to a full spec+implement retry. Same quality bar, far less wasted rework.
+- **Skip-not-throw test convention** — implement prompts (build loop + overnight) and `/tdd` RED now require tests that need a live database, network, API key, or optional tooling to conditionally skip when the dependency is absent (`it.skipIf` / `pytest.mark.skipif` / `t.Skip`) and run fully when present. Throwing "set DATABASE_URL first" from a test turns an environment gap into a false failure in worktrees and CI.
+- **Failures grouped by gate** — the parallel completion summary now prints a "Failures by phase" section (`preflight` / `spec` / `implement` / `verify` / `merge` / `post-merge verify` / `drift` / `rebuild`), with per-feature detail carried from the worker result files. Skip counts in a passing suite are also surfaced (warning at ≥10) so a green-but-hollow run is visible.
+
 ## 2.12.2 — Parallel Worktree Names Survive Real Feature Titles
 
 Parallel/independent/rebuild modes built git branch names with a thin `tr` that only swapped spaces, `:`, and `/`. Feature titles with backticks, parentheses, arrows, or `*` (common in roadmap rows) produced refs that `git check-ref-format` rejects, so the worktree create failed immediately and the feature was skipped for the rest of the run — starving anything that depended on it.
