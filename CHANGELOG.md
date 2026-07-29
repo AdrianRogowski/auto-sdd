@@ -2,6 +2,13 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.13.2 — Mockup Blocks Render in Markdown Preview
+
+The `/spec-first` Feature Spec Format template wraps a full example spec in a fenced code block, and that example contains its own fenced mockup blocks. Three-backtick fences cannot nest: renderers treated the first inner fence as the closer of the outer block, so from there the fence parity flipped — the Default State mockup rendered as a giant markdown table (every line starts and ends with `|`), and every other mockup alternated between code and mangled prose. The raw text agents read was always fine; the preview was not.
+
+### Fixed
+- **`/spec-first` Feature Spec Format fence** — the outer template fence is now four backticks, which legally contains the three-backtick mockup fences. All 15 mockup frames inside the template now render as code blocks in markdown preview.
+
 ## 2.13.1 — Mockup Exemplar Alignment
 
 The `/spec-first` mockup exemplar is what agents copy, so a broken exemplar teaches every future spec to draw broken mockups. Two blocks in the v2.12.0 template had alignment defects: the Default State breadcrumb row was 81 characters wide (one past the frame), and the action-button rows in both the Default State and the Loading State dropped the sidebar column divider, visibly collapsing the two-column layout for 3-5 rows.

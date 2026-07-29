@@ -450,7 +450,7 @@ Show the spec summary plus persona revision notes:
 
 Every feature spec has **YAML frontmatter** that powers the auto-generated mapping table.
 
-```markdown
+````markdown
 ---
 feature: Feature Name
 domain: domain-name
@@ -794,7 +794,7 @@ spacing ........ spacing-4 between blocks, spacing-2 inside rows
 ## Learnings
 
 <!-- This section grows over time via /compound -->
-```
+````
 
 ---
 
