@@ -2,15 +2,19 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.13.4 — Keep the Loop Stack-Agnostic
+
+### Removed
+- **ORM-specific post-merge migration renumbering** — briefly shipped in 2.13.3. Numbered-migration collisions are a project concern (hooks / local scripts), not core SDD. Auto-detect of `MIGRATION_CMD` for apply remains unchanged.
+
 ## 2.13.3 — Parallel Merge Survives Drift + Kill
 
-Real parallel runs died in the quiet window after `DRIFT_FIXED`: a second full typecheck+suite, then compound, then roadmap ✅. Closing the terminal (SIGHUP) left verified merges unmarked and colliding `drizzle/0004_*.sql` files from sibling worktrees required hand renumbering.
+Real parallel runs died in the quiet window after `DRIFT_FIXED`: a second full typecheck+suite, then compound, then roadmap ✅. Closing the terminal (SIGHUP) left verified merges unmarked with no breadcrumb.
 
 ### Fixed
 - **Signal breadcrumbs** (`build-loop-local.sh`) — trap `INT`/`TERM`/`HUP` with a logged interrupt + cleanup, and `EXIT` with nonzero code, so the classic "log ends on DRIFT_FIXED" death leaves a reason.
 - **Skip redundant post-`DRIFT_FIXED` verify** — if the drift commit only touched `.specs/*` / markdown / docs, skip the second full build+test (drift agent already ran the suite). Re-verify only when source changed. Mirrored in `overnight-autonomous.sh`.
 - **Roadmap ✅ before compound** — mark complete (and bump `LOOP_BUILT`) immediately after drift passes; compound stays non-blocking so a kill during learnings extraction cannot leave a verified feature unmarked. Same reorder in overnight.
-- **Renumber colliding drizzle migrations** (`renumber_colliding_drizzle_migrations`) — after a successful merge, if two up-migrations share a numeric prefix, keep the integration branch's copy and renumber the newcomer (plus `.down.sql`, journal, and in-repo references), then commit before verify.
 
 ## 2.13.2 — Mockup Blocks Render in Markdown Preview
 

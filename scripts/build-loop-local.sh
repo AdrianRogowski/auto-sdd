@@ -2025,118 +2025,6 @@ regenerate_lockfile() {
     fi
 }
 
-# Parallel worktrees often both mint drizzle/0004_*.sql. After merge, rename
-# colliding numeric prefixes (keeping the integration branch's copy of each
-# number) and rewrite journal + references. Non-blocking if no drizzle/ dir.
-_drizzle_num_taken() {
-    local want="$1"
-    local other on
-    for other in drizzle/[0-9]*_*.sql; do
-        [ -f "$other" ] || continue
-        [[ "$other" == *.down.sql ]] && continue
-        on=$(basename "$other" | sed -E 's/^0*([0-9]+)_.*/\1/; s/^$/0/')
-        if [ "$on" -eq "$want" ] 2>/dev/null; then
-            return 0
-        fi
-    done
-    return 1
-}
-
-renumber_colliding_drizzle_migrations() {
-    local since_commit="$1"
-    [ -d "drizzle" ] || return 0
-    [ -n "$since_commit" ] || return 0
-
-    local new_migs
-    new_migs=$(git diff --name-only "$since_commit"..HEAD 2>/dev/null | grep -E '^drizzle/[0-9]+_.+\.sql$' | grep -v '\.down\.sql$' || true)
-    [ -n "$new_migs" ] || return 0
-
-    local changed=false
-    local f num tag new_num new_tag pad keep claimants other
-
-    while IFS= read -r f; do
-        [ -z "$f" ] || [ ! -f "$f" ] && continue
-        [[ "$f" == *.down.sql ]] && continue
-        num=$(basename "$f" | sed -E 's/^([0-9]+)_.*/\1/')
-        tag=$(basename "$f" .sql)
-
-        # Skip files that already lived on the integration tip
-        if git cat-file -e "$since_commit:$f" 2>/dev/null; then
-            continue
-        fi
-
-        claimants=0
-        keep=""
-        for other in drizzle/${num}_*.sql; do
-            [ -f "$other" ] || continue
-            [[ "$other" == *.down.sql ]] && continue
-            claimants=$((claimants + 1))
-            if git cat-file -e "$since_commit:$other" 2>/dev/null; then
-                keep="$other"
-            fi
-        done
-        [ "$claimants" -le 1 ] && continue
-        [ -z "$keep" ] && continue
-        [ "$keep" = "$f" ] && continue
-
-        new_num=$((10#$num + 1))
-        while _drizzle_num_taken "$new_num"; do
-            new_num=$((new_num + 1))
-        done
-
-        pad=$(printf "%0${#num}d" "$new_num")
-        new_tag="${pad}_${tag#*_}"
-        log "Renumbering colliding migration $tag → $new_tag (kept $(basename "$keep"))"
-
-        git mv "$f" "drizzle/${new_tag}.sql" 2>/dev/null || mv "$f" "drizzle/${new_tag}.sql"
-        if [ -f "drizzle/${tag}.down.sql" ]; then
-            git mv "drizzle/${tag}.down.sql" "drizzle/${new_tag}.down.sql" 2>/dev/null \
-                || mv "drizzle/${tag}.down.sql" "drizzle/${new_tag}.down.sql"
-        fi
-
-        if command -v rg &>/dev/null; then
-            rg -l --glob '!node_modules' --glob '!.git' --glob '!.build-worktrees' -F "$tag" . 2>/dev/null \
-                | while IFS= read -r ref; do
-                    [ -f "$ref" ] || continue
-                    sed -i.bak "s/${tag}/${new_tag}/g" "$ref" && rm -f "${ref}.bak"
-                done
-        else
-            grep -rl --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.build-worktrees -F "$tag" . 2>/dev/null \
-                | while IFS= read -r ref; do
-                    [ -f "$ref" ] || continue
-                    sed -i.bak "s/${tag}/${new_tag}/g" "$ref" && rm -f "${ref}.bak"
-                done
-        fi
-
-        changed=true
-    done <<< "$new_migs"
-
-    if [ "$changed" = true ]; then
-        if [ -f "drizzle/meta/_journal.json" ] && command -v node &>/dev/null; then
-            node -e '
-const fs = require("fs");
-const p = "drizzle/meta/_journal.json";
-const j = JSON.parse(fs.readFileSync(p, "utf8"));
-const seen = new Set();
-j.entries = (j.entries || []).filter((e) => {
-  if (!e || !e.tag || seen.has(e.tag)) return false;
-  seen.add(e.tag);
-  return true;
-});
-j.entries.sort((a, b) => String(a.tag).localeCompare(String(b.tag)));
-j.entries.forEach((e, i) => { e.idx = i; });
-fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
-' 2>/dev/null || true
-        fi
-        git add -A drizzle/ 2>/dev/null || true
-        git add -u 2>/dev/null || true
-        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-            git commit -m "chore: renumber colliding drizzle migrations after merge" >/dev/null 2>&1 || true
-        fi
-        success "Renumbered colliding drizzle migrations"
-    fi
-}
-
 # After a merge changes a dependency manifest, node_modules on the integration
 # checkout is stale — modules only the incoming feature depends on are missing,
 # and the post-merge build/test gate fails on require/import errors that have
@@ -2404,10 +2292,6 @@ merge_and_verify_feature() {
     # Dependencies first: verification runs against installed modules, not the
     # manifest, so a merged package.json without an install fails spuriously.
     sync_dependencies_after_merge "$pre_merge_commit"
-
-    # Parallel worktrees often mint the same drizzle/000N_*.sql — renumber
-    # newcomers before verify so the suite doesn't fail on duplicate prefixes.
-    renumber_colliding_drizzle_migrations "$pre_merge_commit"
 
     # Post-merge verification: build + tests on integrated code
     local merge_ok=true
