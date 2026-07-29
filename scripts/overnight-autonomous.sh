@@ -475,7 +475,34 @@ DRIFT_UNRESOLVABLE: {what needs human attention}
             local fix_summary
             fix_summary=$(echo "$DRIFT_RESULT" | grep "DRIFT_FIXED" | tail -1 | cut -d: -f2- | xargs)
             success "Drift auto-fixed: $fix_summary"
-            # Verify the fix didn't break build or tests
+
+            # Re-verify only when the drift commit touched real source —
+            # spec/docs-only fixes are common and a second full suite is a
+            # long silent window where the parent often gets killed.
+            local drift_changed needs_reverify=false
+            drift_changed=$(
+                {
+                    git diff --name-only HEAD~1 2>/dev/null || true
+                    git diff --name-only 2>/dev/null || true
+                    git diff --cached --name-only 2>/dev/null || true
+                } | sort -u | grep -v '^$' || true
+            )
+            if [ -n "$drift_changed" ]; then
+                while IFS= read -r f; do
+                    [ -z "$f" ] && continue
+                    case "$f" in
+                        .specs/*|*.md|*.mdc|*.txt|*.html) ;;
+                        *) needs_reverify=true; break ;;
+                    esac
+                done <<< "$drift_changed"
+            fi
+
+            if [ "$needs_reverify" = false ]; then
+                log "Drift fix only touched specs/docs (or nothing pending) — skipping redundant verify"
+                return 0
+            fi
+
+            log "Drift fix touched source — re-running build/test verify"
             if ! check_build; then
                 warn "Drift fix broke the build — retrying"
             elif should_run_step "test" && [ -n "$TEST_CMD" ] && ! check_tests; then
@@ -814,7 +841,14 @@ BUILD_FAILED: {reason}
             FEATURE_SESSION_NOTES="${FEATURE_SESSION_NOTES}${LAST_DRIFT_SUMMARY}"
         fi
 
-        # Phase 5: Compound (fresh agent)
+        # Mark roadmap ✅ BEFORE compound/review. Those phases are non-blocking;
+        # a kill during compound used to leave verified features unmarked.
+        if [ "$post_build_ok" = true ]; then
+            mark_roadmap_status "$FEATURE_NAME" "✅"
+            git add -A && git commit -m "chore: mark $FEATURE_NAME complete in roadmap" --allow-empty 2>/dev/null || true
+        fi
+
+        # Phase 5: Compound (fresh agent) — never blocks completion
         if [ "$post_build_ok" = true ] && [ "$COMPOUND" = "true" ]; then
             log "Phase 5: Compound — $FEATURE_NAME"
             COMPOUND_OUTPUT=$(mktemp)
@@ -831,12 +865,6 @@ BUILD_FAILED: {reason}
             elif should_run_step "test" && [ -n "$TEST_CMD" ] && ! check_tests; then
                 warn "Code review broke tests!"
             fi
-        fi
-
-        # Mark roadmap ✅ at script level (after ALL verification)
-        if [ "$post_build_ok" = true ]; then
-            mark_roadmap_status "$FEATURE_NAME" "✅"
-            git add -A && git commit -m "chore: mark $FEATURE_NAME complete in roadmap" --allow-empty 2>/dev/null || true
         fi
         
         # Push and create PR

@@ -834,7 +834,35 @@ DRIFT_UNRESOLVABLE: {what needs human attention and why}
             local fix_summary
             fix_summary=$(echo "$DRIFT_RESULT" | grep "DRIFT_FIXED" | tail -1 | cut -d: -f2- | trim)
             success "Drift detected and auto-fixed: $fix_summary"
-            # Verify the fix didn't break build or tests
+
+            # The drift agent already ran the suite. Re-verify only when the
+            # drift commit (or leftover dirty files) touched real source —
+            # spec/docs-only fixes are the common case and a second full suite
+            # is a long silent window where the parent often gets killed.
+            local drift_changed needs_reverify=false
+            drift_changed=$(
+                {
+                    git diff --name-only HEAD~1 2>/dev/null || true
+                    git diff --name-only 2>/dev/null || true
+                    git diff --cached --name-only 2>/dev/null || true
+                } | sort -u | grep -v '^$' || true
+            )
+            if [ -n "$drift_changed" ]; then
+                while IFS= read -r f; do
+                    [ -z "$f" ] && continue
+                    case "$f" in
+                        .specs/*|*.md|*.mdc|*.txt|*.html) ;;
+                        *) needs_reverify=true; break ;;
+                    esac
+                done <<< "$drift_changed"
+            fi
+
+            if [ "$needs_reverify" = false ]; then
+                log "Drift fix only touched specs/docs (or nothing pending) — skipping redundant verify"
+                return 0
+            fi
+
+            log "Drift fix touched source — re-running build/test verify"
             if ! check_build; then
                 warn "Drift fix broke the build — retrying"
             elif should_run_step "test" && [ -n "$TEST_CMD" ] && ! check_tests; then
@@ -1653,8 +1681,12 @@ cleanup_all_worktrees() {
     fi
 }
 
-# Trap handler: kill background workers and clean up worktrees on unexpected exit
-cleanup_on_exit() {
+# Trap handlers: log why the loop died (closing a terminal sends SIGHUP, which
+# used to kill the script with no breadcrumb — the classic "log ends on
+# DRIFT_FIXED" failure mode).
+RALPH_EXITING=0
+
+ralph_cleanup_jobs() {
     local pids
     pids=$(jobs -p 2>/dev/null)
     if [ -n "$pids" ]; then
@@ -1664,7 +1696,30 @@ cleanup_on_exit() {
     cd "$PROJECT_DIR" 2>/dev/null || true
     cleanup_all_worktrees 2>/dev/null || true
 }
-trap cleanup_on_exit INT TERM
+
+cleanup_on_signal() {
+    local sig="${1:-SIGNAL}"
+    [ "$RALPH_EXITING" = 1 ] && return 0
+    RALPH_EXITING=1
+    warn "Loop interrupted ($sig) — last phase may be incomplete; cleaning up"
+    ralph_cleanup_jobs
+    exit 130
+}
+
+cleanup_on_exit() {
+    local ec=$?
+    [ "$RALPH_EXITING" = 1 ] && return 0
+    RALPH_EXITING=1
+    if [ "$ec" -ne 0 ]; then
+        warn "Loop exiting with code $ec"
+        ralph_cleanup_jobs
+    fi
+}
+
+trap 'cleanup_on_signal INT' INT
+trap 'cleanup_on_signal TERM' TERM
+trap 'cleanup_on_signal HUP' HUP
+trap cleanup_on_exit EXIT
 
 # ── Parallel build helpers ────────────────────────────────────────────────
 
@@ -1970,6 +2025,118 @@ regenerate_lockfile() {
     fi
 }
 
+# Parallel worktrees often both mint drizzle/0004_*.sql. After merge, rename
+# colliding numeric prefixes (keeping the integration branch's copy of each
+# number) and rewrite journal + references. Non-blocking if no drizzle/ dir.
+_drizzle_num_taken() {
+    local want="$1"
+    local other on
+    for other in drizzle/[0-9]*_*.sql; do
+        [ -f "$other" ] || continue
+        [[ "$other" == *.down.sql ]] && continue
+        on=$(basename "$other" | sed -E 's/^0*([0-9]+)_.*/\1/; s/^$/0/')
+        if [ "$on" -eq "$want" ] 2>/dev/null; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+renumber_colliding_drizzle_migrations() {
+    local since_commit="$1"
+    [ -d "drizzle" ] || return 0
+    [ -n "$since_commit" ] || return 0
+
+    local new_migs
+    new_migs=$(git diff --name-only "$since_commit"..HEAD 2>/dev/null | grep -E '^drizzle/[0-9]+_.+\.sql$' | grep -v '\.down\.sql$' || true)
+    [ -n "$new_migs" ] || return 0
+
+    local changed=false
+    local f num tag new_num new_tag pad keep claimants other
+
+    while IFS= read -r f; do
+        [ -z "$f" ] || [ ! -f "$f" ] && continue
+        [[ "$f" == *.down.sql ]] && continue
+        num=$(basename "$f" | sed -E 's/^([0-9]+)_.*/\1/')
+        tag=$(basename "$f" .sql)
+
+        # Skip files that already lived on the integration tip
+        if git cat-file -e "$since_commit:$f" 2>/dev/null; then
+            continue
+        fi
+
+        claimants=0
+        keep=""
+        for other in drizzle/${num}_*.sql; do
+            [ -f "$other" ] || continue
+            [[ "$other" == *.down.sql ]] && continue
+            claimants=$((claimants + 1))
+            if git cat-file -e "$since_commit:$other" 2>/dev/null; then
+                keep="$other"
+            fi
+        done
+        [ "$claimants" -le 1 ] && continue
+        [ -z "$keep" ] && continue
+        [ "$keep" = "$f" ] && continue
+
+        new_num=$((10#$num + 1))
+        while _drizzle_num_taken "$new_num"; do
+            new_num=$((new_num + 1))
+        done
+
+        pad=$(printf "%0${#num}d" "$new_num")
+        new_tag="${pad}_${tag#*_}"
+        log "Renumbering colliding migration $tag → $new_tag (kept $(basename "$keep"))"
+
+        git mv "$f" "drizzle/${new_tag}.sql" 2>/dev/null || mv "$f" "drizzle/${new_tag}.sql"
+        if [ -f "drizzle/${tag}.down.sql" ]; then
+            git mv "drizzle/${tag}.down.sql" "drizzle/${new_tag}.down.sql" 2>/dev/null \
+                || mv "drizzle/${tag}.down.sql" "drizzle/${new_tag}.down.sql"
+        fi
+
+        if command -v rg &>/dev/null; then
+            rg -l --glob '!node_modules' --glob '!.git' --glob '!.build-worktrees' -F "$tag" . 2>/dev/null \
+                | while IFS= read -r ref; do
+                    [ -f "$ref" ] || continue
+                    sed -i.bak "s/${tag}/${new_tag}/g" "$ref" && rm -f "${ref}.bak"
+                done
+        else
+            grep -rl --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.build-worktrees -F "$tag" . 2>/dev/null \
+                | while IFS= read -r ref; do
+                    [ -f "$ref" ] || continue
+                    sed -i.bak "s/${tag}/${new_tag}/g" "$ref" && rm -f "${ref}.bak"
+                done
+        fi
+
+        changed=true
+    done <<< "$new_migs"
+
+    if [ "$changed" = true ]; then
+        if [ -f "drizzle/meta/_journal.json" ] && command -v node &>/dev/null; then
+            node -e '
+const fs = require("fs");
+const p = "drizzle/meta/_journal.json";
+const j = JSON.parse(fs.readFileSync(p, "utf8"));
+const seen = new Set();
+j.entries = (j.entries || []).filter((e) => {
+  if (!e || !e.tag || seen.has(e.tag)) return false;
+  seen.add(e.tag);
+  return true;
+});
+j.entries.sort((a, b) => String(a.tag).localeCompare(String(b.tag)));
+j.entries.forEach((e, i) => { e.idx = i; });
+fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
+' 2>/dev/null || true
+        fi
+        git add -A drizzle/ 2>/dev/null || true
+        git add -u 2>/dev/null || true
+        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+            git commit -m "chore: renumber colliding drizzle migrations after merge" >/dev/null 2>&1 || true
+        fi
+        success "Renumbered colliding drizzle migrations"
+    fi
+}
+
 # After a merge changes a dependency manifest, node_modules on the integration
 # checkout is stale — modules only the incoming feature depends on are missing,
 # and the post-merge build/test gate fails on require/import errors that have
@@ -2238,6 +2405,10 @@ merge_and_verify_feature() {
     # manifest, so a merged package.json without an install fails spuriously.
     sync_dependencies_after_merge "$pre_merge_commit"
 
+    # Parallel worktrees often mint the same drizzle/000N_*.sql — renumber
+    # newcomers before verify so the suite doesn't fail on duplicate prefixes.
+    renumber_colliding_drizzle_migrations "$pre_merge_commit"
+
     # Post-merge verification: build + tests on integrated code
     local merge_ok=true
     if [ -n "$BUILD_CMD" ] && ! check_build; then
@@ -2273,16 +2444,18 @@ merge_and_verify_feature() {
         return 1
     fi
 
-    # Post-merge Phase 5: Compound (extract learnings)
+    # Mark ✅ BEFORE compound. Compound is non-blocking learnings extraction;
+    # a kill during that agent used to leave verified merges unmarked forever.
+    LOOP_BUILT=$((LOOP_BUILT + 1))
+    BUILT_FEATURE_NAMES+=("$feature")
+    mark_roadmap_status_committed "$feature" "✅"
+
+    # Post-merge Phase 5: Compound (extract learnings) — never blocks completion
     if [ "$COMPOUND" = "true" ]; then
         log "Post-merge compound: $feature"
         run_agent "$COMPOUND_MODEL" "$(compound_prompt "$feature" "$spec" "$sources")" 2>/dev/null || true
     fi
 
-    # All phases passed — feature is complete
-    LOOP_BUILT=$((LOOP_BUILT + 1))
-    BUILT_FEATURE_NAMES+=("$feature")
-    mark_roadmap_status_committed "$feature" "✅"
     success "Merged and verified: $feature"
     return 0
 }
