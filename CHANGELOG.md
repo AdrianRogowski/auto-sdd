@@ -2,6 +2,13 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.13.1 — Mockup Exemplar Alignment
+
+The `/spec-first` mockup exemplar is what agents copy, so a broken exemplar teaches every future spec to draw broken mockups. Two blocks in the v2.12.0 template had alignment defects: the Default State breadcrumb row was 81 characters wide (one past the frame), and the action-button rows in both the Default State and the Loading State dropped the sidebar column divider, visibly collapsing the two-column layout for 3-5 rows.
+
+### Fixed
+- **`/spec-first` UI Mockup template** — every framed row is now exactly 80 characters and the sidebar divider runs unbroken from the header rule to the footer rule. Action rows were redrawn to fit inside the left column: Primary (filled) and Secondary (outline) as boxes, Cancel as ghost text (matching the existing focus/hover callout), and the loading skeleton buttons with the "(actions disabled)" note beneath them.
+
 ## 2.13.0 — Environment-Sound Parallel Mode
 
 A parallel run is only as good as the environment each gate runs in. Post-mortems of real runs showed most "test failures" were environment failures wearing a test costume: merged `package.json` with no install, worktrees where the test runner didn't resolve, tests that threw on missing secrets, and a summary that reported `Failed: 4` without saying which gate caught what. This release keeps the full test suite at every gate (no scoped-verify shortcuts) and makes the environment reliable enough to deserve it.
