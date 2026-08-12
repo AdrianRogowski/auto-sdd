@@ -918,13 +918,13 @@ Created by `/vision` (from description, Jira, or Confluence) or `/clone-app <url
 
 ### roadmap.md
 
-Ordered list of features with dependencies and status:
+Ordered list of features with dependencies and status. Each row is a Ralph unit and should be **prefix-demoable** (stop after any ✅ and still show something real). Prefer **L verticals** (~10–15 for a typical app); no layer rows (setup/schema/tokens). Sequence by **time-to-aha** — core loop before auth, with an ownership stub (`user_id`) in the first domain feature so auth can land later. Sub-steps belong in a feature spec's Implementation Slices, not as extra roadmap rows.
 
 ```markdown
 | # | Feature | Source | Jira | Complexity | Deps | Status |
 |---|---------|--------|------|------------|------|--------|
-| 1 | Auth: Signup | clone-app | PROJ-101 | M | - | ✅ |
-| 2 | Dashboard | clone-app | PROJ-102 | L | 1 | ⬜ |
+| 1 | App spine + store + task inbox | clone-app | PROJ-101 | L | - | ✅ |
+| 2 | Projects + filters | clone-app | PROJ-102 | L | 1 | ⬜ |
 ```
 
 Status symbols:

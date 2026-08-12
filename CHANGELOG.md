@@ -2,6 +2,15 @@
 
 Versioning: MAJOR.MINOR.PATCH — MAJOR = breaking changes (renamed commands, changed directory structure, removed config), MINOR = new features (new commands, new phases, new config), PATCH = bug fixes only.
 
+## 2.14.0 — Demoable Roadmap Rows (Core Loop Before Auth)
+
+`/clone-app` was teaching atomized layer rows (Project setup, Database models, Auth first) while `/roadmap` already said vertical. Greenfield Ralph paid a fixed tax per tiny row and burned early cycles on signup before anyone could tell if the product was useful.
+
+### Changed
+- **`/clone-app`** — prefer L verticals (~10–15 features); ban layer rows; fuse scaffold into the first demoable feature; sequence by time-to-aha; defer auth unless it is the product; keep an ownership stub (`user_id`) in the first domain feature; phases are chapter titles, not execution units.
+- **`/roadmap`** — shared row contract (prefix-demoable, vertical, L-default, core loop before auth); warn when adding auth before the loop; import/reprioritize modes merge atomized/layer tickets the same way.
+- **Roadmap template + docs** — Phase 1 is "Core loop", not "Foundation + auth"; examples no longer start with Project setup / Auth: Signup.
+
 ## 2.13.4 — Keep the Loop Stack-Agnostic
 
 ### Removed

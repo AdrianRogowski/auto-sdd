@@ -17,23 +17,35 @@ Manage the roadmap for: $ARGUMENTS
 | `--from-confluence PAGE_ID` | **Import** — seed from Confluence page |
 | No subcommand, roadmap exists | **Interactive** — ask what user wants to do |
 
+## Roadmap row contract (all modes)
+
+Every roadmap row is a Ralph/`build-next` unit. It must satisfy:
+
+1. **Prefix-demoable** — after the row is ✅, someone can stop and use a coherent product. Incomplete is fine; "schema only" / "service layer" / setup-only is not.
+2. **Vertical, not horizontal** — a screen, flow, or endpoint someone can click or curl. Never add layer rows ("set up database schema", "build service layer", "API endpoints", "project setup", "design tokens"). Fold layers into the user-facing feature they serve. Sub-steps live in the feature spec's `### Implementation Slices`.
+3. **Prefer L verticals** — default to Large (~7–15 files, full vertical). Use M when the vertical is naturally smaller. Reserve S for polish/bugs, not bootstrap. File count is a soft ceiling; do not split just because a row feels "big" unless each piece is demoable alone.
+4. **Greenfield density** — aim for ~10–15 features for a typical app. Fuse scaffold + store into the first demoable feature. Prefer one "MCP surface" row over one row per tool.
+5. **Core loop before auth** — sequence by time-to-aha. Defer signup/login/OAuth until after the core loop is demoable, unless auth *is* the product or strategy demands enterprise onboarding first. Still include an **ownership stub** (`user_id` / scoped queries, hardcoded local user is fine) in the first domain feature so auth can land later without a rewrite.
+6. **Phases are chapter titles** — Ralph executes rows, not phases. A phase may group several `--full` units; each unit is its own row.
+
 ## Instructions
 
 ### Create Mode
 
-1. Read `.specs/strategy.md` for business strategy — target customer, buying motion, success metrics, anti-goals. **Strategy drives prioritization**: features that support the buying motion and move success metrics come first. Anti-goals prevent scope creep into features the strategy says to defer.
-2. Read `.specs/vision.md` for app overview, screens, tech stack, principles
+1. Read `.specs/strategy.md` for business strategy — target customer, buying motion, success metrics, anti-goals. **Strategy drives prioritization**: features that support the buying motion and move success metrics come first. Anti-goals prevent scope creep into features the strategy says to defer. PLG / exploration → time-to-aha before auth. Enterprise top-down → onboarding/auth may come earlier.
+2. Read `.specs/vision.md` for app overview, screens, tech stack, principles. Identify the **core loop / aha** explicitly.
 3. Scan codebase for existing features (routes, API, schema, components) — mark as ✅
-4. Decompose into right-sized features:
-   - **S**: 1-3 files, single component
-   - **M**: 3-7 files, multiple components
-   - **L**: 7-15 files, full feature
-   - If bigger than L, break down further
-   - **Vertical, not horizontal**: every row must be independently demoable by a user when done — a screen, flow, or endpoint someone can click or curl. Never create layer rows like "set up database schema", "build service layer", or "API endpoints". Layers are implementation detail that belongs in a feature spec's `### Implementation Slices`, not on the roadmap. If a candidate feature is a layer, merge it into the user-facing feature it serves
-5. Identify dependencies between features
-6. Group into phases (4-8 features each, descriptive names, clear goals). If strategy exists, phase names should reflect the strategy's progression (e.g., "Phase 1: Core Value / Time-to-Aha" for PLG, "Phase 1: Enterprise Onboarding" for top-down)
+4. Decompose into right-sized features using the **Roadmap row contract** above:
+   - **L** (default): full user-demoable vertical
+   - **M**: smaller but still demoable vertical
+   - **S**: polish / small additive only
+   - If a candidate is a layer, merge it into the user-facing feature it serves
+   - Target ~10–15 rows for a greenfield / clone-sized app
+5. Identify dependencies — prefer shallow graphs; do not put auth on the critical path of the core loop
+6. Group into phases (3–6 features each when using fatter L rows; descriptive names, clear goals). Phase 1 should be "Core loop / time-to-aha" (or strategy-equivalent), not "Foundation: setup + auth"
 7. Write roadmap.md with Implementation Rules, Progress, Phases, Status/Complexity Legends, Notes
-8. Show draft, wait for approval
+8. Self-check: no layer rows; row #1 demoable without auth (unless exception); ownership stub called out for first domain feature; density ~10–15 unless the product is genuinely larger
+9. Show draft, wait for approval
 
 ### Add Mode
 
@@ -41,14 +53,15 @@ Manage the roadmap for: $ARGUMENTS
 2. Classify new feature(s): complexity, dependencies, placement (existing phase / new phase / ad-hoc)
 3. Break down large features into multiple items — each item must stay vertical (user-demoable), never a layer
 4. If the requested feature is layer-shaped ("add the API for X"), fold it into the user-facing feature it serves instead of adding a row
-5. Show diff and confirm before applying
+5. If the request is auth and the core loop is not yet ✅, warn and default to placing auth *after* the core loop (unless user overrides or strategy exception applies)
+6. Show diff and confirm before applying
 
 ### Reprioritize Mode
 
 1. Read roadmap, strategy, vision, learnings, mapping. If strategy exists, check alignment: "Are the top features actually the ones that move the strategy's success metrics?"
-2. Present analysis: what's done, what's next, observations (parallelizable phases, dependency bottlenecks, complexity concerns)
-3. Ask about priority changes, new features, cancellations, reordering
-4. Restructure based on feedback
+2. Present analysis: what's done, what's next, observations (parallelizable phases, dependency bottlenecks, complexity concerns, auth-too-early, atomized rows that should merge)
+3. Ask about priority changes, new features, cancellations, reordering, merging tiny rows into L verticals
+4. Restructure based on feedback — keep the row contract
 5. Show diff and confirm
 
 ### Status Mode (read-only)
@@ -59,15 +72,16 @@ Show progress table by phase, overall percentage, next feature, blocked items, a
 
 1. Fetch epics → map to Phases
 2. Fetch stories under each epic → map to Features. Jira stories are often layer-shaped ("build the API", "create the schema") — merge those into the user-facing feature they serve so every roadmap row stays vertical
-3. Story points/priority → Complexity estimates
-4. Jira keys → Source column
-5. Show draft, wait for approval
+3. Auth/onboarding stories: place after core-loop features unless strategy says enterprise-first
+4. Story points/priority → Complexity estimates (bias toward L when merging atomized tickets)
+5. Jira keys → Source column
+6. Show draft, wait for approval
 
 ### Import Mode (Confluence)
 
 1. Fetch page and child pages
 2. Parse for feature lists, tables, headings
-3. Transform into roadmap format
+3. Transform into roadmap format (apply row contract: merge layers, defer auth, prefer L)
 4. Show draft, wait for approval
 
 ## Roadmap Structure
@@ -77,10 +91,11 @@ Always include:
 - Progress summary table
 - Phases with feature tables (# | Feature | Source | Complexity | Deps | Status)
 - Status Legend and Complexity Legend
-- Notes section with implementation insights
+- Notes section with implementation insights (call out ownership stub + auth deferral when relevant)
 
 Feature numbering: Phase 1 = #1-9, Phase 2 = #10-19, etc. Ad-hoc = #100+.
 
 ## After Saving
 
 Report feature counts by phase and suggest next steps (`/build-next`, `/roadmap add`, `/roadmap-triage`).
+Remind the user: each ✅ should be a place you could stop and still demo something real.

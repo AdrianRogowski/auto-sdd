@@ -532,13 +532,13 @@ Ordered list of features with dependencies. Managed by:
 - `/roadmap-triage` — add items from Slack/Jira
 
 ```markdown
-## Phase 1: Foundation
+## Phase 1: Core loop
 
 | # | Feature | Source | Jira | Complexity | Deps | Status |
 |---|---------|--------|------|------------|------|--------|
-| 1 | Project setup | clone-app | PROJ-101 | S | - | ✅ |
-| 2 | Auth: Signup | clone-app | PROJ-102 | M | 1 | 🔄 |
-| 3 | Auth: Login | clone-app | PROJ-103 | M | 1 | ⬜ |
+| 1 | App spine + store + task inbox | clone-app | PROJ-101 | L | - | ✅ |
+| 2 | Projects + filters | clone-app | PROJ-102 | L | 1 | 🔄 |
+| 3 | Auth: signup + login + session | clone-app | PROJ-103 | M | 1 | ⬜ |
 
 ## Ad-hoc Requests
 
@@ -860,7 +860,7 @@ git auto
 
 # Creates:
 # - .specs/vision.md (app description)
-# - .specs/roadmap.md (20 features across 3 phases)
+# - .specs/roadmap.md (~12 demoable verticals across 3 phases)
 
 # 3. Create personas and design system
 /personas                    # From vision's target users

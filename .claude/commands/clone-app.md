@@ -13,8 +13,8 @@ Analyze an existing web application and create a build plan (vision + roadmap).
 ## What This Command Does
 
 1. **Discover** - Navigate the target app and document what it does
-2. **Decompose** - Break it into right-sized features (each fits in one agent context)
-3. **Sequence** - Order features respecting dependencies
+2. **Decompose** - Break it into demoable vertical features (prefer L; avoid layer rows)
+3. **Sequence** - Order by time-to-aha, then dependencies (core loop before auth)
 4. **Document** - Create vision.md and populate roadmap.md
 
 ---
@@ -29,16 +29,18 @@ Use the browser MCP to explore the app:
 3. Document:
    - What the app does (purpose)
    - Who it's for (target users)
+   - The core loop / aha moment (what makes someone say "this is useful")
    - Main screens/areas
    - Key interactions
-   - Auth flow (if any)
+   - Auth flow (if any) — note it, but do not assume it comes first in the roadmap
    - Data displayed
 ```
 
 ### Discovery Checklist
 
 - [ ] Landing/home page
-- [ ] Sign up / login flow
+- [ ] Core loop (the primary create → view / act flow) — find this before deep-diving auth
+- [ ] Sign up / login flow (document; usually defer in roadmap)
 - [ ] Main dashboard or list view
 - [ ] Detail views
 - [ ] Create/edit forms
@@ -77,13 +79,14 @@ Update `.specs/vision.md` with discovered information:
 
 **Target users**: [Who uses it]
 **Core value proposition**: [Problem it solves]
+**Core loop / aha**: [The smallest path to "this is useful"]
 
 ## Key Screens / Areas
 
 | Screen | Purpose | Priority |
 |--------|---------|----------|
-| Landing | Marketing, signup CTA | Core |
-| Dashboard | Main user view | Core |
+| Landing | Marketing, signup CTA | Secondary (unless landing IS the product) |
+| [Core loop screen] | Primary user value | Core |
 | Settings | User preferences | Secondary |
 
 ## Tech Stack
@@ -108,74 +111,114 @@ Update `.specs/vision.md` with discovered information:
 
 ## Step 3: Decompose into Features
 
-Break the app into features that are:
+Break the app into roadmap rows that are **prefix-demoable**: after any completed row, someone can stop and use a coherent product (incomplete is fine; broken or "schema only" is not).
 
-### Right-Sized (Critical!)
+### Sizing (Critical!)
 
-Each feature must be completable in ONE agent context window:
-- **Small (S)**: 1-3 files, single component
-- **Medium (M)**: 3-7 files, multiple components
-- **Large (L)**: 7-15 files, full feature with tests
+Prefer **Large (L) verticals** as the default roadmap row. Ralph pays a fixed tax per row (spec, worktree, verify, drift, compound) — atomizing greenfield into tiny rows makes that tax dominate.
 
-If a feature seems larger than L, break it down further!
+| Size | When to use | Rough scope |
+|------|-------------|-------------|
+| **L** (default) | A full user-demoable vertical | Often ~7–15 files; fuse scaffold + store + first CRUD when it's the first row |
+| **M** | A clear vertical that doesn't need to be huge | ~3–7 files |
+| **S** | Polish, bugs, small additive UX — **not** bootstrap | ~1–3 files |
+
+**Hard rules:**
+
+1. **Vertical, not horizontal.** Every row must be independently demoable — a screen, flow, or endpoint someone can click or curl. Never create layer rows like "Project setup", "Database models", "design tokens", "service layer", or "API endpoints". Fold layers into the user-facing feature they serve. Sub-steps belong in the feature spec's `### Implementation Slices`, not on the roadmap.
+2. **One row = one aha (or one coherent capability).** Prefer "App spine + store + log/list items" over separate setup / store / one-tool rows. Prefer "MCP logging surface" over one row per tool.
+3. **Target ~10–15 features** for a typical cloned app (not 25–40). If you have more, merge rows that aren't separately demoable.
+4. **Split only when** a row would exceed one agent context *and* the pieces are each demoable alone. File count is a soft ceiling, not an automatic splitter. "Scary" is not a reason to atomize.
+5. **Phases are chapter titles, not execution units.** Ralph builds rows. A phase may contain several `--full` units — each must be its own roadmap row.
 
 ### Feature Decomposition Pattern
 
 ```
-Auth System (too big!)
-  ↓ Break down into:
-  - Auth: Signup form (M)
-  - Auth: Login form (M)
-  - Auth: Session management (M)
-  - Auth: Password reset (M)
-  - Auth: Protected routes (S)
+❌ Too atomized / layer-shaped:
+  - Project setup
+  - SQLite store
+  - Auth: Signup
+  - Auth: Login
+  - Auth: Session
+  - MCP: log_diaper
+  - MCP: list_diapers
+
+✅ Demoable verticals (greenfield / clone):
+  - App spine + local store + log/list diapers (L)  ← first demo; includes ownership stub
+  - MCP logging surface (L)
+  - Voice parse + confirm (L)
+  - Companion timeline (L)
+  - Auth: signup + login + session (M)             ← after core loop proves value
 ```
+
+### Ownership without early Auth
+
+Defer **auth product** (signup/login screens, OAuth, invites) until after the core loop is demoable — unless auth *is* the product (SSO/permissions/multi-tenant are the aha) or strategy demands enterprise onboarding first.
+
+Do **not** defer **ownership in the data model**. The first domain feature should include a thin identity stub:
+
+- A `user_id` / `owner_id` (or equivalent) on domain records from day one
+- Queries scoped by that id
+- A hardcoded/local current user is fine until real auth lands
+
+Then "add auth later" is mostly session + guards, not a rewrite.
 
 ### Identify Dependencies
 
-Features should list what must be built first:
+Features should list what must be built first. Prefer a shallow chain: core loop unlocks most later rows; avoid serializing everything behind auth.
 
 ```
-Feature: Dashboard
-Deps: 1, 2  (requires Auth: Signup and Auth: Login)
+Feature: Companion timeline
+Deps: 1  (requires the first log/list vertical — NOT auth)
 ```
 
 ---
 
 ## Step 4: Sequence into Phases
 
-Organize features into logical phases:
+Sequence by **time-to-aha**, then dependencies — not by "what a mature SaaS has in its nav."
 
-### Phase 1: Foundation
-- Project setup
-- Core layout/navigation
-- Auth (if needed)
-- Database models
+### Phase 1: Core loop / time-to-aha
+- First row = scaffold fused into the first demoable vertical (not a separate setup row)
+- Primary create → view / act path
+- No auth unless auth is the aha
 
-### Phase 2: Core Features
-- Primary user functionality
-- Main screens
+### Phase 2: Expand the loop
+- Adjacent capabilities that deepen the same value
+- Secondary screens that still demo alone
 
-### Phase 3: Enhancement
-- Secondary features
-- Polish
-- Performance
+### Phase 3: Accounts, polish, scale
+- Auth / sync / multi-user (when needed)
+- Nice-to-haves, performance, keyboard shortcuts
+
+If `.specs/strategy.md` exists, phase names and order should follow buying motion (PLG → time-to-aha first; enterprise → onboarding/auth may come earlier).
 
 ---
 
 ## Step 5: Populate Roadmap
 
-Update `.specs/roadmap.md` with the feature list:
+Update `.specs/roadmap.md` with the feature list. Reuse the same structure and Implementation Rules as `/roadmap`. Example:
 
 ```markdown
-## Phase 1: Foundation
+## Phase 1: Core loop
 
 | # | Feature | Source | Jira | Complexity | Deps | Status |
 |---|---------|--------|------|------------|------|--------|
-| 1 | Project setup | clone-app | - | S | - | ⬜ |
-| 2 | Auth: Signup | clone-app | - | M | 1 | ⬜ |
-| 3 | Auth: Login | clone-app | - | M | 1 | ⬜ |
-| 4 | Auth: Session | clone-app | - | M | 2,3 | ⬜ |
+| 1 | App spine + store + task inbox (create/complete) | clone-app | - | L | - | ⬜ |
+| 2 | Projects + filters on the inbox | clone-app | - | L | 1 | ⬜ |
+
+## Phase 2: Expand
+
+| # | Feature | Source | Jira | Complexity | Deps | Status |
+|---|---------|--------|------|------------|------|--------|
+| 10 | Due dates + priorities | clone-app | - | M | 1 | ⬜ |
+| 11 | Search | clone-app | - | M | 1 | ⬜ |
+
+## Phase 3: Accounts & polish
+
+| # | Feature | Source | Jira | Complexity | Deps | Status |
+|---|---------|--------|------|------------|------|--------|
+| 20 | Auth: signup + login + session | clone-app | - | M | 1 | ⬜ |
 ```
 
 ### Jira Integration (Optional)
@@ -225,6 +268,15 @@ After running `/clone-app`:
 2. `.specs/roadmap.md` - Populated with sequenced features
 3. (Optional) Jira tickets created for each feature
 
+Before finishing, self-check the roadmap:
+
+- [ ] No layer rows (setup / schema / tokens / "API for X")
+- [ ] ~10–15 features for a typical app (merge if bloated)
+- [ ] Row #1 is demoable without auth (unless auth is the product)
+- [ ] Auth is not Phase 1 unless strategy/aha requires it
+- [ ] First domain feature mentions ownership stub (`user_id` / scoped queries)
+- [ ] Every row is something you could stop on and show someone
+
 ---
 
 ## Next Steps
@@ -240,7 +292,7 @@ Created:
 
 Next steps:
 1. Review vision.md - does it capture the app correctly?
-2. Review roadmap.md - is the sequence logical?
+2. Review roadmap.md - is each row demoable? Is auth deferred past the core loop?
 3. Run /build-next to start building!
 
 Or run overnight-autonomous.sh to build features while you sleep.
@@ -255,10 +307,10 @@ User: /clone-app https://todoist.com
 
 Agent:
 1. Navigates to todoist.com
-2. Explores: landing, signup, login, task list, task detail, projects, labels, filters
-3. Documents findings in vision.md
-4. Decomposes into ~15-20 features
-5. Sequences by dependency
+2. Finds core loop: add task → see it in inbox → complete it (aha before accounts)
+3. Documents findings in vision.md (including core loop)
+4. Decomposes into ~12 L/M verticals (not 25 atomized rows)
+5. Sequences: inbox loop → projects/filters → dates/priorities → auth → polish
 6. Populates roadmap.md
 
 Output:
@@ -266,16 +318,16 @@ Output:
 
 Created:
 - .specs/vision.md (Todoist - task management app)
-- .specs/roadmap.md (18 features across 3 phases)
+- .specs/roadmap.md (12 features across 3 phases)
 
-Phase 1: Foundation (5 features)
-  - Project setup, Auth, Core layout, Task model, List component
+Phase 1: Core loop (3 features)
+  - App spine + store + task inbox, Projects + list switcher, Quick add + complete
 
-Phase 2: Core (8 features)  
-  - Task CRUD, Projects, Labels, Filters, Due dates, Priorities, Search
+Phase 2: Expand (5 features)
+  - Due dates, Priorities, Labels, Filters, Search
 
-Phase 3: Enhancement (5 features)
-  - Keyboard shortcuts, Drag-drop, Dark mode, Mobile responsive, Performance
+Phase 3: Accounts & polish (4 features)
+  - Auth: signup + login + session, Keyboard shortcuts, Drag-drop reorder, Mobile polish
 
 Ready to build? Run /build-next to start with feature #1.
 ```

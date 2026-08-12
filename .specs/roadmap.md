@@ -1,6 +1,6 @@
 # Build Roadmap
 
-> Ordered list of features to implement. Each feature should be completable within a single agent context window.
+> Ordered list of features to implement. Each row should be a demoable vertical (prefer L) — after any ✅ you can stop and still show something real.
 > Updated by `/roadmap`, `/clone-app`, `/roadmap-triage`, and `/build-next`.
 
 ## Implementation Rules
@@ -14,6 +14,8 @@
 - **Real validation** — forms validate against real constraints, not just "is this field filled in?"
 - **Real error handling** — API failures, empty results, rate limits, and edge cases must be handled, not ignored.
 - **Test against real flows** — when verifying a feature, use the app as a user would. Trigger real API calls, see real results.
+- **No layer rows** — never add "project setup", "database schema", or "API endpoints" as standalone features; fold them into a user-demoable vertical. Sub-steps go in the feature spec's Implementation Slices.
+- **Core loop before auth** — unless auth is the product, sequence signup/login after the first demoable loop. Still include an ownership stub (`user_id` / scoped queries) in the first domain feature.
 
 ---
 
@@ -32,29 +34,29 @@
 
 ---
 
-## Phase 1: Foundation
+## Phase 1: Core loop
 
-> Core infrastructure and authentication. Must be built first.
-
-| # | Feature | Source | Jira | Complexity | Deps | Status |
-|---|---------|--------|------|------------|------|--------|
-| <!-- 1 --> | <!-- Auth: User signup --> | <!-- clone-app --> | <!-- PROJ-101 --> | <!-- M --> | <!-- - --> | <!-- ⬜ --> |
-
----
-
-## Phase 2: Core Features
-
-> Primary user-facing functionality.
+> First demoable value. Scaffold + store fuse into the first vertical — not separate rows. Auth deferred unless it is the aha.
 
 | # | Feature | Source | Jira | Complexity | Deps | Status |
 |---|---------|--------|------|------------|------|--------|
-| <!-- 10 --> | <!-- Dashboard --> | <!-- clone-app --> | <!-- PROJ-110 --> | <!-- L --> | <!-- 1,2 --> | <!-- ⬜ --> |
+| <!-- 1 --> | <!-- App spine + store + primary create/list flow --> | <!-- clone-app --> | <!-- PROJ-101 --> | <!-- L --> | <!-- - --> | <!-- ⬜ --> |
 
 ---
 
-## Phase 3: Enhancement
+## Phase 2: Expand the loop
 
-> Secondary features, polish, and optimizations.
+> Adjacent capabilities that deepen the same value. Each row still demoable alone.
+
+| # | Feature | Source | Jira | Complexity | Deps | Status |
+|---|---------|--------|------|------------|------|--------|
+| <!-- 10 --> | <!-- Secondary capability on the core loop --> | <!-- clone-app --> | <!-- PROJ-110 --> | <!-- L --> | <!-- 1 --> | <!-- ⬜ --> |
+
+---
+
+## Phase 3: Accounts & polish
+
+> Auth/sync when needed, then nice-to-haves. Auth is usually here, not Phase 1.
 
 | # | Feature | Source | Jira | Complexity | Deps | Status |
 |---|---------|--------|------|------------|------|--------|
@@ -86,15 +88,16 @@
 
 | Symbol | Meaning | Typical Scope |
 |--------|---------|---------------|
-| S | Small | Single component, few files |
-| M | Medium | Multiple components, moderate logic |
-| L | Large | Full feature, many files, complex logic |
+| L | Large (default) | Full demoable vertical; prefer this for roadmap rows |
+| M | Medium | Smaller vertical that is still demoable alone |
+| S | Small | Polish / bugs / tiny additive UX — not bootstrap layers |
 
 ---
 
 ## Notes
 
 <!-- Any important context for the roadmap -->
+<!-- Greenfield: ~10–15 demoable verticals; ownership stub in first domain feature; auth usually Phase 3 -->
 
 ---
 
